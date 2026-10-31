@@ -116,7 +116,22 @@ function irPara(rota, rolar) {
   });
   document.querySelector(`.menu a[data-rota="${rota}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
   RENDER[rota]?.();
+  tecladoNumerico();
   if (rolar) window.scrollTo({ top: 0 });
+}
+
+// No celular, abre o teclado numérico com vírgula nos campos de número.
+function tecladoNumerico() {
+  document.querySelectorAll('input[type="number"]:not([inputmode])').forEach((i) => i.setAttribute("inputmode", "decimal"));
+}
+
+function aplicarTema(claro) {
+  if (claro) document.documentElement.dataset.tema = "claro";
+  else delete document.documentElement.dataset.tema;
+  $("btn-tema").setAttribute("aria-label", claro ? "Mudar para o tema preto" : "Mudar para o tema claro");
+  try { localStorage.setItem("invest-simulador:tema", claro ? "claro" : "preto"); } catch { /* sem armazenamento */ }
+  renderFita();
+  if (rotaAtual) RENDER[rotaAtual]?.();
 }
 window.addEventListener("hashchange", () => irPara(location.hash.slice(1), true));
 
@@ -408,6 +423,7 @@ function renderPremissas() {
       ${campo(c, "ret", 0.5, c.id === "cdi" ? 'disabled title="Segue o juro real de longo prazo"' : "")}
       ${campo(c, "vol", 0.5, 'min="0"')}${campo(c, "custo", 0.05, 'min="0"')}${campo(c, "ir", 0.5, 'min="0" max="30"')}
     </tr>`).join("") + "</tbody>";
+  tecladoNumerico();
 }
 
 RENDER.projecao = () => { renderPesos(); renderPremissas(); rodarProjecao(); };
@@ -623,6 +639,7 @@ function renderProdutos() {
       <td><input type="number" id="rf-${i}-carencia" data-i="${i}" data-campo="carencia" value="${p.carencia}" min="0" step="1" aria-label="Carência de ${esc(p.nome)}" /></td>
       <td><button type="button" data-remover-rf="${i}" aria-label="Remover ${esc(p.nome)}">✕</button></td>
     </tr>`).join("") + "</tbody>";
+  tecladoNumerico();
 }
 
 function renderPlano() {
@@ -822,6 +839,9 @@ function abrirFonte() {
 // ============ Eventos ============
 function ligarEventos() {
   $("fonte-dados").addEventListener("click", abrirFonte);
+  $("btn-tema").addEventListener("click", () => aplicarTema(document.documentElement.dataset.tema !== "claro"));
+  $("btn-topo").addEventListener("click", () => window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }));
+  window.addEventListener("scroll", () => { $("btn-topo").dataset.oculto = window.scrollY > 900 ? "nao" : "sim"; }, { passive: true });
   $("fechar-fonte").addEventListener("click", () => ($("dialogo-fonte").hidden = true));
   $("dialogo-fonte").addEventListener("click", (e) => { if (e.target.id === "dialogo-fonte") e.target.hidden = true; });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("dialogo-fonte").hidden = true; });
@@ -889,7 +909,7 @@ function ligarEventos() {
   });
   $("rf-adicionar").addEventListener("click", () => {
     estado.produtosRF.push({ id: "p" + Date.now(), nome: "Novo CDB", tipo: "cdi", pct: 105, isento: false, teto: 0, pctAcima: 100, carencia: 0 });
-    gravar(); renderProdutos(); atualizarSimulador();
+    gravar(); renderProdutos(); atualizarSimulador(); tecladoNumerico();
     $(`rf-${estado.produtosRF.length - 1}-nome`).select();
   });
   $("rf-restaurar").addEventListener("click", () => {
@@ -941,6 +961,7 @@ function ligarEventos() {
   montarQuestionario();
   montarHistorico();
   ligarEventos();
+  $("btn-tema").setAttribute("aria-label", document.documentElement.dataset.tema === "claro" ? "Mudar para o tema preto" : "Mudar para o tema claro");
   if (estado.perfil.id) $("pj-carteira").value = estado.perfil.id;
   else $("pj-carteira").value = "moderado";
   renderFita();

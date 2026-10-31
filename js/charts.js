@@ -35,7 +35,7 @@
   }
   function redesenharTodos() { registrados.forEach((fn, el) => el.isConnected && fn()); }
   matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", redesenharTodos);
-  new MutationObserver(redesenharTodos).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  new MutationObserver(redesenharTodos).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-tema"] });
 
   function tooltip(el) {
     let t = el.querySelector(".tt");

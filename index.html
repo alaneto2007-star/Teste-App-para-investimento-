@@ -2,119 +2,374 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Invest Simulador</title>
+  <meta name="claude:viewport-fit-sides" content="cover" />
+  <meta name="description" content="Simule, compare e planeje investimentos: perfil de risco, projeção Monte Carlo, histórico de 2016 a 2024, cripto e renda fixa." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
   <header class="topo">
-    <h1>Invest Simulador</h1>
-    <p class="sub">Simule, organize e planeje seus investimentos. Projeto de estudo, não é recomendação de investimento.</p>
-    <nav class="abas" role="tablist">
-      <button class="aba ativa" data-aba="simulador" role="tab">Simulador</button>
-      <button class="aba" data-aba="metas" role="tab">Reserva &amp; Metas</button>
-      <button class="aba" data-aba="carteira" role="tab">Minha carteira</button>
-    </nav>
+    <div class="topo-linha">
+      <a class="marca" href="#visao" aria-label="Invest Simulador, ir para a visão geral">
+        <span class="marca-sinal" aria-hidden="true">R$</span>
+        <span class="marca-nome">Invest Simulador</span>
+      </a>
+      <button type="button" class="fonte" id="fonte-dados" title="De onde vêm os números">
+        <span class="fonte-ponto" aria-hidden="true"></span><span id="fonte-txt">Conectando…</span>
+      </button>
+    </div>
+    <div class="fita" id="fita" aria-label="Indicadores de mercado"></div>
   </header>
 
-  <main>
-    <!-- SIMULADOR -->
-    <section id="simulador" class="painel ativo">
-      <div class="grade">
-        <form id="form-sim" class="cartao">
-          <h2>Seu investimento</h2>
-          <label>Valor inicial (R$)<input type="number" id="inicial" value="1000" min="0" step="100" /></label>
-          <label>Aporte mensal (R$)<input type="number" id="mensal" value="300" min="0" step="50" /></label>
-          <label>Prazo (meses)<input type="number" id="meses" value="36" min="1" max="600" /></label>
+  <div class="app">
+    <nav class="menu" aria-label="Seções">
+      <a href="#visao" data-rota="visao">Visão geral</a>
+      <a href="#perfil" data-rota="perfil">Meu perfil</a>
+      <a href="#projecao" data-rota="projecao">Projeção</a>
+      <a href="#historico" data-rota="historico">Histórico</a>
+      <a href="#cripto" data-rota="cripto">Cripto</a>
+      <a href="#renda-fixa" data-rota="renda-fixa">Renda fixa</a>
+      <a href="#onde-investir" data-rota="onde-investir">Onde investir</a>
+      <a href="#carteira" data-rota="carteira">Minha carteira</a>
+    </nav>
 
-          <h2>Taxas</h2>
-          <p class="status" id="status-taxas">Buscando taxas no Banco Central…</p>
-          <label>Selic (% a.a.)<input type="number" id="selic" value="15" min="0" step="0.05" /></label>
-          <label>CDI (% a.a.)<input type="number" id="cdi" value="14.9" min="0" step="0.05" /></label>
-          <label>CDB (% do CDI)<input type="number" id="pctCdb" value="100" min="0" step="1" /></label>
-          <label>LCI/LCA (% do CDI)<input type="number" id="pctLci" value="90" min="0" step="1" /></label>
-          <label>Inflação – IPCA (% a.a.)<input type="number" id="ipca" value="4.5" min="0" step="0.1" /></label>
-          <button type="button" class="botao secundario" id="btn-taxas">Atualizar taxas do Banco Central</button>
-        </form>
+    <main id="conteudo">
+      <!-- ============ VISÃO GERAL ============ -->
+      <section class="vista" id="v-visao" aria-labelledby="t-visao">
+        <div class="cabeca">
+          <p class="sobre">Painel</p>
+          <h1 id="t-visao">Risco e retorno, lado a lado</h1>
+          <p class="lead">Compare as principais classes de investimento do Brasil e do exterior, descubra seu perfil e projete seu patrimônio com milhares de cenários.</p>
+        </div>
 
-        <div class="cartao">
-          <h2>Resultado após <span id="prazo-txt"></span></h2>
-          <p class="investido">Total investido: <strong id="total-investido"></strong></p>
-          <div class="tabela-wrap">
-            <table class="tabela">
-              <thead>
-                <tr><th>Produto</th><th>Bruto</th><th>IR</th><th>Líquido</th><th>Lucro</th><th title="Valor líquido descontada a inflação">Em reais de hoje</th></tr>
-              </thead>
-              <tbody id="tabela-res"></tbody>
+        <div class="grade-2">
+          <article class="painel" id="cartao-perfil"></article>
+          <article class="painel" id="cartao-carteira"></article>
+        </div>
+
+        <article class="painel">
+          <div class="painel-cabeca">
+            <div>
+              <h2>Mapa de risco × retorno</h2>
+              <p class="nota">Premissas da projeção: retorno anual esperado e volatilidade (quanto o valor oscila em um ano). A linha tracejada liga as carteiras modelo, do perfil conservador ao agressivo.</p>
+            </div>
+          </div>
+          <div class="grafico" id="g-mapa"></div>
+        </article>
+
+        <article class="painel">
+          <div class="painel-cabeca">
+            <div>
+              <h2>Como cada classe se saiu de 2016 a 2024</h2>
+              <p class="nota">Retornos anuais aproximados, em reais. O minigráfico mostra a trajetória de cada classe em escala logarítmica.</p>
+            </div>
+            <a class="link-acao" href="#historico">Simular com aportes →</a>
+          </div>
+          <div class="rolagem"><table class="tabela" id="tab-classes"></table></div>
+        </article>
+      </section>
+
+      <!-- ============ PERFIL ============ -->
+      <section class="vista" id="v-perfil" aria-labelledby="t-perfil" hidden>
+        <div class="cabeca">
+          <p class="sobre">Perfil de investidor</p>
+          <h1 id="t-perfil">Quanto risco faz sentido para você?</h1>
+          <p class="lead">Seis perguntas. O resultado define a carteira modelo usada na projeção e no rebalanceamento.</p>
+        </div>
+        <div class="grade-perfil">
+          <form class="painel" id="form-perfil"></form>
+          <article class="painel" id="res-perfil" aria-live="polite"></article>
+        </div>
+      </section>
+
+      <!-- ============ PROJEÇÃO ============ -->
+      <section class="vista" id="v-projecao" aria-labelledby="t-projecao" hidden>
+        <div class="cabeca">
+          <p class="sobre">Projeção Monte Carlo</p>
+          <h1 id="t-projecao">Milhares de futuros possíveis para o seu dinheiro</h1>
+          <p class="lead">Cada cenário sorteia retornos mês a mês, respeitando a volatilidade e a correlação entre as classes. A faixa mostra onde o seu patrimônio tende a ficar.</p>
+        </div>
+        <div class="grade-lateral">
+          <form class="painel" id="form-proj">
+            <h2>Parâmetros</h2>
+            <label for="pj-inicial">Valor inicial (R$)<input type="number" id="pj-inicial" value="10000" min="0" step="1000" /></label>
+            <label for="pj-mensal">Aporte mensal (R$)<input type="number" id="pj-mensal" value="1000" min="0" step="100" /></label>
+            <label for="pj-anos">Prazo (anos)<input type="number" id="pj-anos" value="15" min="1" max="40" /></label>
+            <label for="pj-carteira">Carteira
+              <select id="pj-carteira">
+                <option value="conservador">Conservador</option>
+                <option value="moderado">Moderado</option>
+                <option value="arrojado">Arrojado</option>
+                <option value="agressivo">Agressivo</option>
+                <option value="minha">Minha carteira atual</option>
+                <option value="personalizada">Personalizada</option>
+              </select>
+            </label>
+            <div id="pj-pesos" class="pesos"></div>
+          </form>
+          <div class="pilha">
+            <div class="kpis" id="pj-kpis"></div>
+            <article class="painel">
+              <div class="painel-cabeca">
+                <div>
+                  <h2>Patrimônio projetado</h2>
+                  <p class="nota" id="pj-legenda-nota"></p>
+                </div>
+                <div class="legenda" id="pj-legenda"></div>
+              </div>
+              <div class="grafico" id="g-proj"></div>
+            </article>
+            <details class="painel premissas">
+              <summary>Premissas por classe (editáveis)</summary>
+              <p class="nota">Retorno anual mediano esperado e volatilidade anual, em reais. O CDI acompanha a taxa da aba Renda fixa. Estimativas de longo prazo, não promessas.</p>
+              <div class="rolagem"><table class="tabela" id="tab-premissas"></table></div>
+              <button type="button" class="botao fantasma" id="pj-restaurar">Restaurar premissas padrão</button>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ HISTÓRICO ============ -->
+      <section class="vista" id="v-historico" aria-labelledby="t-historico" hidden>
+        <div class="cabeca">
+          <p class="sobre">Backtest</p>
+          <h1 id="t-historico">E se você tivesse começado antes?</h1>
+          <p class="lead">Aportes mensais aplicados aos retornos reais de cada ano, de 2016 a 2024. A carteira do perfil é rebalanceada todo ano.</p>
+        </div>
+        <div class="grade-lateral">
+          <form class="painel" id="form-hist">
+            <h2>Parâmetros</h2>
+            <label for="ht-inicio">Começar em
+              <select id="ht-inicio"></select>
+            </label>
+            <label for="ht-inicial">Valor inicial (R$)<input type="number" id="ht-inicial" value="10000" min="0" step="1000" /></label>
+            <label for="ht-mensal">Aporte mensal (R$)<input type="number" id="ht-mensal" value="500" min="0" step="100" /></label>
+            <label class="chave" for="ht-real"><input type="checkbox" id="ht-real" /> Descontar a inflação (IPCA)</label>
+            <fieldset>
+              <legend>Comparar</legend>
+              <div id="ht-classes" class="checks"></div>
+            </fieldset>
+          </form>
+          <div class="pilha">
+            <article class="painel">
+              <div class="painel-cabeca">
+                <div><h2 id="ht-titulo">Patrimônio acumulado</h2><p class="nota" id="ht-nota"></p></div>
+              </div>
+              <div class="legenda" id="ht-legenda"></div>
+              <div class="grafico" id="g-hist"></div>
+            </article>
+            <article class="painel">
+              <h2>Resultado no período</h2>
+              <div class="rolagem"><table class="tabela" id="tab-hist"></table></div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ CRIPTO ============ -->
+      <section class="vista" id="v-cripto" aria-labelledby="t-cripto" hidden>
+        <div class="cabeca">
+          <p class="sobre">Criptoativos</p>
+          <h1 id="t-cripto">Alto potencial, quedas brutais</h1>
+          <p class="lead">Cotações, histórico de volatilidade e uma calculadora para definir quanto da carteira colocar em cripto.</p>
+        </div>
+
+        <article class="painel">
+          <div class="painel-cabeca">
+            <div><h2>Mercado agora</h2><p class="nota" id="cr-nota">Buscando cotações…</p></div>
+            <button type="button" class="botao fantasma" id="cr-atualizar">Atualizar</button>
+          </div>
+          <div class="rolagem"><table class="tabela" id="tab-cripto"></table></div>
+        </article>
+
+        <div class="grade-2">
+          <article class="painel">
+            <h2>Retorno por ano, em reais</h2>
+            <p class="nota">Barras com sinal de quebra passaram de 300%.</p>
+            <div class="legenda" id="cr-legenda"></div>
+            <div class="grafico" id="g-cripto-anos"></div>
+            <p class="nota" id="cr-cortadas"></p>
+          </article>
+          <article class="painel">
+            <h2>As maiores quedas</h2>
+            <p class="nota">Do topo ao fundo, em dólar. Quem comprou no topo precisou de anos para recuperar.</p>
+            <ul class="quedas" id="cr-quedas"></ul>
+          </article>
+        </div>
+
+        <article class="painel">
+          <h2>Quanto de cripto cabe na sua carteira?</h2>
+          <p class="nota">Teste o impacto de uma queda ou de uma alta forte no seu patrimônio total.</p>
+          <div class="simulador-cripto">
+            <form id="form-cripto" class="campos-linha">
+              <label for="cr-patrimonio">Patrimônio total (R$)<input type="number" id="cr-patrimonio" value="100000" min="0" step="5000" /></label>
+              <label for="cr-pct">Parte em cripto: <output id="cr-pct-out">5%</output><input type="range" id="cr-pct" min="0" max="50" step="1" value="5" /></label>
+              <label for="cr-queda">Queda da cripto: <output id="cr-queda-out">-75%</output><input type="range" id="cr-queda" min="-95" max="0" step="5" value="-75" /></label>
+              <label for="cr-alta">Alta da cripto: <output id="cr-alta-out">+200%</output><input type="range" id="cr-alta" min="0" max="1000" step="25" value="200" /></label>
+            </form>
+            <div class="cenarios" id="cr-cenarios"></div>
+          </div>
+        </article>
+
+        <article class="painel">
+          <h2>Como investir em cripto no Brasil</h2>
+          <div class="rolagem">
+            <table class="tabela comparativo">
+              <thead><tr><th>Forma</th><th>Exemplos</th><th>Custódia</th><th>Imposto de renda</th><th>Bom para</th></tr></thead>
+              <tbody>
+                <tr><td>Exchange brasileira</td><td>Mercado Bitcoin, Foxbit, Binance BR</td><td>Da exchange, ou na sua carteira</td><td>Vendas até R$ 35 mil/mês isentas; acima, 15% a 22,5%</td><td>Quem quer a moeda de verdade e liquidez 24h</td></tr>
+                <tr><td>ETF na B3</td><td>QBTC11, BITH11, QETH11, HASH11</td><td>Do gestor do fundo</td><td>15% sobre o lucro, sem isenção</td><td>Quem quer praticidade e tudo na mesma corretora</td></tr>
+                <tr><td>Autocustódia</td><td>Carteira física (hardware wallet)</td><td>Sua, pelas 12 ou 24 palavras</td><td>Mesma regra da exchange</td><td>Valores altos guardados por muitos anos</td></tr>
+              </tbody>
             </table>
           </div>
-          <div id="grafico" class="grafico" aria-label="Gráfico da evolução do saldo"></div>
-          <div id="legenda" class="legenda"></div>
-          <p class="nota">IR regressivo: 22,5% (até 6 meses), 20% (até 1 ano), 17,5% (até 2 anos), 15% (acima). Poupança e LCI/LCA são isentas. "Em reais de hoje" desconta a inflação informada: mostra o poder de compra real do valor final. Não considera taxas de custódia nem variação futura das taxas.</p>
+          <p class="nota">Nunca compartilhe suas palavras de recuperação. Promessas de rendimento fixo em cripto costumam ser golpe.</p>
+        </article>
+      </section>
+
+      <!-- ============ RENDA FIXA ============ -->
+      <section class="vista" id="v-renda-fixa" aria-labelledby="t-rf" hidden>
+        <div class="cabeca">
+          <p class="sobre">Renda fixa</p>
+          <h1 id="t-rf">Onde o seu dinheiro rende mais com segurança</h1>
+          <p class="lead">Compare poupança, Tesouro Selic, CDB e LCI/LCA já descontando o imposto de renda e a inflação.</p>
         </div>
-      </div>
-    </section>
-
-    <!-- RESERVA E METAS -->
-    <section id="metas" class="painel">
-      <div class="grade">
-        <form id="form-reserva" class="cartao">
-          <h2>Reserva de emergência</h2>
-          <label>Gastos mensais (R$)<input type="number" id="gastos" value="3000" min="0" step="100" /></label>
-          <label>Situação de trabalho
-            <select id="perfil">
-              <option value="clt">CLT (6 meses)</option>
-              <option value="publico">Servidor público (3 meses)</option>
-              <option value="autonomo">Autônomo / empresário (12 meses)</option>
-            </select>
-          </label>
-          <div class="destaque" id="res-reserva"></div>
-          <p class="nota">Deixe a reserva em algo seguro e com liquidez diária, como Tesouro Selic ou CDB com 100% do CDI.</p>
-        </form>
-
-        <form id="form-meta" class="cartao">
-          <h2>Quanto tempo até a meta?</h2>
-          <label>Meta (R$)<input type="number" id="alvo" value="50000" min="0" step="1000" /></label>
-          <label>Já tenho (R$)<input type="number" id="meta-inicial" value="2000" min="0" step="100" /></label>
-          <label>Aporte mensal (R$)<input type="number" id="meta-mensal" value="800" min="0" step="50" /></label>
-          <label>Rentabilidade (% a.a.)<input type="number" id="meta-taxa" value="12" min="0" step="0.5" /></label>
-          <div class="destaque" id="res-meta"></div>
-        </form>
-      </div>
-    </section>
-
-    <!-- CARTEIRA -->
-    <section id="carteira" class="painel">
-      <div class="grade">
-        <form id="form-ativo" class="cartao">
-          <h2>Adicionar investimento</h2>
-          <label>Nome<input type="text" id="ativo-nome" placeholder="Ex.: Tesouro Selic 2029" required /></label>
-          <label>Categoria
-            <select id="ativo-cat">
-              <option>Renda fixa</option>
-              <option>Ações</option>
-              <option>FIIs</option>
-              <option>ETFs</option>
-              <option>Exterior</option>
-              <option>Cripto</option>
-              <option>Outros</option>
-            </select>
-          </label>
-          <label>Valor atual (R$)<input type="number" id="ativo-valor" min="0" step="0.01" required /></label>
-          <button type="submit" class="botao">Adicionar</button>
-          <p class="nota">Os dados ficam salvos só neste navegador.</p>
-        </form>
-
-        <div class="cartao">
-          <h2>Distribuição — <span id="total-carteira"></span></h2>
-          <div id="barras" class="barras"></div>
-          <ul id="lista-ativos" class="lista"></ul>
+        <div class="grade-lateral">
+          <form class="painel" id="form-sim">
+            <h2>Seu investimento</h2>
+            <label for="inicial">Valor inicial (R$)<input type="number" id="inicial" value="1000" min="0" step="100" /></label>
+            <label for="mensal">Aporte mensal (R$)<input type="number" id="mensal" value="300" min="0" step="50" /></label>
+            <label for="meses">Prazo (meses)<input type="number" id="meses" value="36" min="1" max="600" /></label>
+            <h2>Taxas</h2>
+            <p class="status" id="status-taxas"></p>
+            <label for="selic">Selic (% a.a.)<input type="number" id="selic" value="15" min="0" step="0.05" /></label>
+            <label for="cdi">CDI (% a.a.)<input type="number" id="cdi" value="14.9" min="0" step="0.05" /></label>
+            <label for="pctCdb">CDB (% do CDI)<input type="number" id="pctCdb" value="100" min="0" step="1" /></label>
+            <label for="pctLci">LCI/LCA (% do CDI)<input type="number" id="pctLci" value="90" min="0" step="1" /></label>
+            <label for="ipca">Inflação, IPCA (% a.a.)<input type="number" id="ipca" value="4.5" min="0" step="0.1" /></label>
+            <button type="button" class="botao fantasma" id="btn-taxas">Buscar taxas do Banco Central</button>
+          </form>
+          <div class="pilha">
+            <article class="painel">
+              <h2>Resultado após <span id="prazo-txt"></span></h2>
+              <p class="investido">Total investido: <strong id="total-investido"></strong></p>
+              <div class="rolagem">
+                <table class="tabela">
+                  <thead><tr><th>Produto</th><th>Bruto</th><th>IR</th><th>Líquido</th><th>Lucro</th><th title="Valor líquido descontada a inflação">Em reais de hoje</th></tr></thead>
+                  <tbody id="tabela-res"></tbody>
+                </table>
+              </div>
+              <div class="legenda" id="legenda"></div>
+              <div class="grafico" id="grafico"></div>
+              <p class="nota">IR regressivo: 22,5% (até 6 meses), 20% (até 1 ano), 17,5% (até 2 anos), 15% (acima). Poupança e LCI/LCA são isentas. "Em reais de hoje" mostra o poder de compra do valor final. Não considera custódia nem mudanças futuras nas taxas.</p>
+            </article>
+            <div class="grade-2">
+              <form class="painel" id="form-reserva">
+                <h2>Reserva de emergência</h2>
+                <label for="gastos">Gastos mensais (R$)<input type="number" id="gastos" value="3000" min="0" step="100" /></label>
+                <label for="perfil-trab">Situação de trabalho
+                  <select id="perfil-trab">
+                    <option value="clt">CLT (6 meses)</option>
+                    <option value="publico">Servidor público (3 meses)</option>
+                    <option value="autonomo">Autônomo ou empresário (12 meses)</option>
+                  </select>
+                </label>
+                <div class="destaque" id="res-reserva"></div>
+              </form>
+              <form class="painel" id="form-meta">
+                <h2>Quanto tempo até a meta?</h2>
+                <label for="alvo">Meta (R$)<input type="number" id="alvo" value="50000" min="0" step="1000" /></label>
+                <label for="meta-inicial">Já tenho (R$)<input type="number" id="meta-inicial" value="2000" min="0" step="100" /></label>
+                <label for="meta-mensal">Aporte mensal (R$)<input type="number" id="meta-mensal" value="800" min="0" step="50" /></label>
+                <label for="meta-taxa">Rentabilidade (% a.a.)<input type="number" id="meta-taxa" value="12" min="0" step="0.5" /></label>
+                <div class="destaque" id="res-meta"></div>
+              </form>
+            </div>
+          </div>
         </div>
-      </div>
-    </section>
-  </main>
+      </section>
 
+      <!-- ============ ONDE INVESTIR ============ -->
+      <section class="vista" id="v-onde-investir" aria-labelledby="t-onde" hidden>
+        <div class="cabeca">
+          <p class="sobre">Guia</p>
+          <h1 id="t-onde">Onde investir hoje, do menor ao maior risco</h1>
+          <p class="lead">20 formas de investir disponíveis para pessoa física no Brasil, com liquidez, imposto e o principal cuidado de cada uma.</p>
+        </div>
+        <div class="filtros" role="group" aria-label="Filtrar por risco" id="filtro-risco"></div>
+        <p class="aviso">Regras de imposto de renda conforme a legislação de 2025. Elas mudam com frequência: confirme na Receita Federal ou com sua corretora antes de investir.</p>
+        <div class="catalogo" id="catalogo"></div>
+      </section>
+
+      <!-- ============ CARTEIRA ============ -->
+      <section class="vista" id="v-carteira" aria-labelledby="t-carteira" hidden>
+        <div class="cabeca">
+          <p class="sobre">Minha carteira</p>
+          <h1 id="t-carteira">O que você tem e para onde vai o próximo aporte</h1>
+          <p class="lead">Registre seus investimentos, compare com a carteira do seu perfil e veja como dividir o próximo aporte para rebalancear.</p>
+        </div>
+        <div class="grade-lateral">
+          <div class="pilha">
+            <form class="painel" id="form-ativo">
+              <h2>Adicionar investimento</h2>
+              <label for="ativo-nome">Nome<input type="text" id="ativo-nome" placeholder="Ex.: Tesouro IPCA+ 2045" required /></label>
+              <label for="ativo-cat">Classe<select id="ativo-cat"></select></label>
+              <label for="ativo-valor">Valor atual (R$)<input type="number" id="ativo-valor" min="0" step="0.01" required /></label>
+              <button type="submit" class="botao">Adicionar</button>
+              <p class="nota">Os dados ficam salvos só neste navegador.</p>
+            </form>
+            <form class="painel" id="form-aporte">
+              <h2>Próximo aporte</h2>
+              <label for="aporte-valor">Quanto vai investir (R$)<input type="number" id="aporte-valor" value="2000" min="0" step="100" /></label>
+              <div id="res-aporte"></div>
+            </form>
+          </div>
+          <div class="pilha">
+            <div class="aviso" id="aviso-exemplo" hidden>
+              <span>Esta é uma carteira de exemplo. Adicione os seus investimentos ou</span>
+              <button type="button" class="botao-link" id="limpar-exemplo">comece do zero</button>
+            </div>
+            <article class="painel">
+              <div class="painel-cabeca">
+                <div><h2>Distribuição atual × alvo</h2><p class="nota" id="cart-alvo-nota"></p></div>
+                <div class="total-carteira" id="total-carteira"></div>
+              </div>
+              <div class="cart-visual">
+                <div class="grafico rosca" id="g-cart"></div>
+                <div class="comparacao" id="cart-comparacao"></div>
+              </div>
+            </article>
+            <article class="painel">
+              <h2>Investimentos</h2>
+              <ul id="lista-ativos" class="lista"></ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <footer class="rodape">
+        <p>Invest Simulador é um projeto de estudo. Nada aqui é recomendação de investimento. Rentabilidade passada não garante rentabilidade futura.</p>
+        <p>Dados históricos aproximados de BCB, IBGE, Anbima, B3 e S&amp;P. Cotações ao vivo do Banco Central e da CoinGecko, quando disponíveis.</p>
+      </footer>
+    </main>
+  </div>
+
+  <div class="dialogo" id="dialogo-fonte" hidden>
+    <div class="dialogo-caixa" role="dialog" aria-modal="true" aria-labelledby="t-fonte">
+      <h2 id="t-fonte">De onde vêm os números</h2>
+      <div id="fonte-detalhe"></div>
+      <button type="button" class="botao" id="fechar-fonte">Entendi</button>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
   <script src="js/calc.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/live.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

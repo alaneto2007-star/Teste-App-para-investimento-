@@ -226,10 +226,8 @@ legend { font-size: 0.84rem; color: var(--tinta-2); font-weight: 500; margin-bot
 
 /* ---------- KPIs ---------- */
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
-#pj-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-#pj-kpis .kpi { grid-column: span 2; }
-#pj-kpis .kpi:nth-child(-n+2) { grid-column: span 3; }
-@media (max-width: 560px) { #pj-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } #pj-kpis .kpi, #pj-kpis .kpi:nth-child(-n+2) { grid-column: span 1; } #pj-kpis .kpi:first-child { grid-column: 1 / -1; } }
+#pj-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 560px) { #pj-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .kpi { background: var(--painel); border: 1px solid var(--linha); border-radius: var(--raio); padding: 14px 16px; display: grid; gap: 2px; align-content: start; }
 .kpi-rotulo { font: 500 0.7rem var(--f-dados); text-transform: uppercase; letter-spacing: 0.07em; color: var(--tinta-3); }
 .kpi-valor { font: 700 1.35rem var(--f-display); letter-spacing: -0.01em; }
@@ -358,3 +356,21 @@ legend { font-size: 0.84rem; color: var(--tinta-2); font-weight: 500; margin-bot
 .dialogo-caixa .botao { width: auto; justify-self: end; }
 .rodape { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--linha); color: var(--tinta-3); font-size: 0.8rem; display: grid; gap: 4px; }
 .rodape p { margin: 0; max-width: 80ch; }
+
+/* ---------- Renda fixa: edição de produtos e plano ---------- */
+.dica { margin: -6px 0 12px; }
+.tabela-edicao td, .tabela-edicao th { padding: 6px 4px; vertical-align: middle; }
+.tabela-edicao td:first-child { min-width: 170px; }
+.tabela-edicao input[type="text"], .tabela-edicao input[type="number"], .tabela-edicao select { margin: 0; padding: 6px 8px; font-size: 0.85rem; }
+.tabela-edicao input[type="text"] { width: 100%; min-width: 170px; text-align: left; }
+.tabela-edicao input[type="number"] { width: 66px; }
+.tabela-edicao select { width: 102px; }
+.tabela-edicao th { white-space: normal; vertical-align: bottom; line-height: 1.3; }
+.tabela-edicao input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--acento); }
+.tabela-edicao td.centro { text-align: center; }
+.tabela-edicao button { background: none; border: 0; color: var(--tinta-3); cursor: pointer; font-size: 1rem; padding: 4px 8px; border-radius: 6px; }
+.tabela-edicao button:hover { color: var(--baixa); background: var(--painel-2); }
+#plano-kpis { margin-bottom: 14px; }
+.tabela td.vencedor { font-weight: 600; color: var(--tinta); }
+.tabela td.fora { color: var(--tinta-3); font-family: var(--f-texto); font-size: 0.78rem; }
+.etiqueta { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--ocre-suave); color: var(--ocre); font: 500 0.7rem var(--f-dados); vertical-align: 1px; }

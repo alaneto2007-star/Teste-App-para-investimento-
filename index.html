@@ -55,7 +55,7 @@
           <div class="painel-cabeca">
             <div>
               <h2>Mapa de risco × retorno</h2>
-              <p class="nota">Premissas da projeção: retorno anual esperado e volatilidade (quanto o valor oscila em um ano). A linha tracejada liga as carteiras modelo, do perfil conservador ao agressivo.</p>
+              <p class="nota">Premissas da projeção: retorno real esperado (acima da inflação) e volatilidade (quanto o valor oscila em um ano). A linha tracejada liga as carteiras modelo, do perfil conservador ao agressivo.</p>
             </div>
           </div>
           <div class="grafico" id="g-mapa"></div>
@@ -91,7 +91,7 @@
         <div class="cabeca">
           <p class="sobre">Projeção Monte Carlo</p>
           <h1 id="t-projecao">Milhares de futuros possíveis para o seu dinheiro</h1>
-          <p class="lead">Cada cenário sorteia retornos mês a mês, respeitando a volatilidade e a correlação entre as classes. A faixa mostra onde o seu patrimônio tende a ficar.</p>
+          <p class="lead">Cada cenário sorteia retornos mês a mês, respeitando a volatilidade e a correlação entre as classes. Tudo em reais de hoje, já descontando custos e imposto, com aportes corrigidos pela inflação.</p>
         </div>
         <div class="grade-lateral">
           <form class="painel" id="form-proj">
@@ -99,6 +99,10 @@
             <label for="pj-inicial">Valor inicial (R$)<input type="number" id="pj-inicial" value="10000" min="0" step="1000" /></label>
             <label for="pj-mensal">Aporte mensal (R$)<input type="number" id="pj-mensal" value="1000" min="0" step="100" /></label>
             <label for="pj-anos">Prazo (anos)<input type="number" id="pj-anos" value="15" min="1" max="40" /></label>
+            <label for="pj-juroreal">Juro real de longo prazo (% a.a.)<input type="number" id="pj-juroreal" value="4.5" min="-5" max="15" step="0.25" /></label>
+            <p class="nota dica" id="pj-juroreal-dica"></p>
+            <label for="pj-inflacao">Inflação esperada (% a.a.)<input type="number" id="pj-inflacao" value="4" min="0" max="30" step="0.25" /></label>
+            <label class="chave" for="pj-ir"><input type="checkbox" id="pj-ir" checked /> Descontar IR no resgate</label>
             <label for="pj-carteira">Carteira
               <select id="pj-carteira">
                 <option value="conservador">Conservador</option>
@@ -125,7 +129,7 @@
             </article>
             <details class="painel premissas">
               <summary>Premissas por classe (editáveis)</summary>
-              <p class="nota">Retorno anual mediano esperado e volatilidade anual, em reais. O CDI acompanha a taxa da aba Renda fixa. Estimativas de longo prazo, não promessas.</p>
+              <p class="nota">Retorno real (acima da inflação) mediano esperado, volatilidade, custos anuais e alíquota de IR no resgate. O retorno da renda fixa pós segue o juro real de longo prazo. Estimativas, não promessas. A alíquota dos FIIs é baixa porque os rendimentos mensais são isentos.</p>
               <div class="rolagem"><table class="tabela" id="tab-premissas"></table></div>
               <button type="button" class="botao fantasma" id="pj-restaurar">Restaurar premissas padrão</button>
             </details>
@@ -149,6 +153,7 @@
             <label for="ht-inicial">Valor inicial (R$)<input type="number" id="ht-inicial" value="10000" min="0" step="1000" /></label>
             <label for="ht-mensal">Aporte mensal (R$)<input type="number" id="ht-mensal" value="500" min="0" step="100" /></label>
             <label class="chave" for="ht-real"><input type="checkbox" id="ht-real" /> Descontar a inflação (IPCA)</label>
+            <label class="chave" for="ht-custos"><input type="checkbox" id="ht-custos" checked /> Descontar custos e IR</label>
             <fieldset>
               <legend>Comparar</legend>
               <div id="ht-classes" class="checks"></div>
@@ -236,26 +241,56 @@
         <div class="cabeca">
           <p class="sobre">Renda fixa</p>
           <h1 id="t-rf">Onde o seu dinheiro rende mais com segurança</h1>
-          <p class="lead">Compare poupança, Tesouro Selic, CDB e LCI/LCA já descontando o imposto de renda e a inflação.</p>
+          <p class="lead">Cadastre as taxas que você encontrou, inclusive as que têm teto. O app calcula a melhor forma de dividir o dinheiro entre elas, já descontando o IR de cada aporte.</p>
         </div>
         <div class="grade-lateral">
           <form class="painel" id="form-sim">
             <h2>Seu investimento</h2>
-            <label for="inicial">Valor inicial (R$)<input type="number" id="inicial" value="1000" min="0" step="100" /></label>
-            <label for="mensal">Aporte mensal (R$)<input type="number" id="mensal" value="300" min="0" step="50" /></label>
-            <label for="meses">Prazo (meses)<input type="number" id="meses" value="36" min="1" max="600" /></label>
+            <label for="inicial">Valor inicial (R$)<input type="number" id="inicial" value="10000" min="0" step="500" /></label>
+            <label for="mensal">Aporte mensal (R$)<input type="number" id="mensal" value="500" min="0" step="50" /></label>
+            <label for="meses">Prazo (meses)<input type="number" id="meses" value="24" min="1" max="600" /></label>
+            <label class="chave" for="rf-liquidez"><input type="checkbox" id="rf-liquidez" /> Só liquidez diária (reserva de emergência)</label>
             <h2>Taxas</h2>
             <p class="status" id="status-taxas"></p>
             <label for="selic">Selic (% a.a.)<input type="number" id="selic" value="15" min="0" step="0.05" /></label>
             <label for="cdi">CDI (% a.a.)<input type="number" id="cdi" value="14.9" min="0" step="0.05" /></label>
-            <label for="pctCdb">CDB (% do CDI)<input type="number" id="pctCdb" value="100" min="0" step="1" /></label>
-            <label for="pctLci">LCI/LCA (% do CDI)<input type="number" id="pctLci" value="90" min="0" step="1" /></label>
             <label for="ipca">Inflação, IPCA (% a.a.)<input type="number" id="ipca" value="4.5" min="0" step="0.1" /></label>
             <button type="button" class="botao fantasma" id="btn-taxas">Buscar taxas do Banco Central</button>
           </form>
           <div class="pilha">
             <article class="painel">
-              <h2>Resultado após <span id="prazo-txt"></span></h2>
+              <div class="painel-cabeca">
+                <div>
+                  <h2>Seus produtos</h2>
+                  <p class="nota">Teto: até quanto o saldo rende a taxa principal (0 = sem teto). O que passar do teto rende a taxa "acima do teto". Carência: meses antes de poder resgatar.</p>
+                </div>
+              </div>
+              <div class="rolagem"><table class="tabela tabela-edicao" id="tab-produtos"></table></div>
+              <div class="acoes">
+                <button type="button" class="botao fantasma" id="rf-adicionar">+ Adicionar produto</button>
+                <button type="button" class="botao fantasma" id="rf-restaurar">Restaurar produtos padrão</button>
+              </div>
+            </article>
+
+            <article class="painel" aria-live="polite">
+              <div class="painel-cabeca">
+                <div>
+                  <h2>Melhor combinação para o seu dinheiro</h2>
+                  <p class="nota" id="plano-nota"></p>
+                </div>
+              </div>
+              <div class="kpis" id="plano-kpis"></div>
+              <div class="rolagem"><table class="tabela" id="tab-plano"></table></div>
+            </article>
+
+            <article class="painel">
+              <h2>Rendimento líquido por prazo, em % do CDI</h2>
+              <p class="nota">Quanto cada produto rende depois do IR, comparado ao CDI bruto. Use para comparar um CDB tributado com uma LCI isenta. O melhor de cada prazo aparece em negrito.</p>
+              <div class="rolagem"><table class="tabela" id="tab-equiv"></table></div>
+            </article>
+
+            <article class="painel">
+              <h2>Cada produto sozinho, após <span id="prazo-txt"></span></h2>
               <p class="investido">Total investido: <strong id="total-investido"></strong></p>
               <div class="rolagem">
                 <table class="tabela">
@@ -265,8 +300,9 @@
               </div>
               <div class="legenda" id="legenda"></div>
               <div class="grafico" id="grafico"></div>
-              <p class="nota">IR regressivo: 22,5% (até 6 meses), 20% (até 1 ano), 17,5% (até 2 anos), 15% (acima). Poupança e LCI/LCA são isentas. "Em reais de hoje" mostra o poder de compra do valor final. Não considera custódia nem mudanças futuras nas taxas.</p>
+              <p class="nota">Todo o dinheiro em um único produto. Em produtos com teto, o saldo acima do teto rende a taxa "acima do teto". IR regressivo calculado por aporte: 22,5% (até 6 meses), 20% (até 1 ano), 17,5% (até 2 anos), 15% (acima). Não considera taxa de custódia do Tesouro.</p>
             </article>
+
             <div class="grade-2">
               <form class="painel" id="form-reserva">
                 <h2>Reserva de emergência</h2>

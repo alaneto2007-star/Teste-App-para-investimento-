@@ -43,7 +43,8 @@ function ler(chave) {
 function gravar() {
   try {
     localStorage.setItem(CHAVE, JSON.stringify({
-      perfil: estado.perfil, carteira: estado.carteira, premissas: estado.premissas, mercado: estado.mercadoManual,
+      perfil: estado.perfil, carteira: estado.carteira, premissasReais: estado.premissas, mercado: estado.mercadoManual,
+      produtosRF: estado.produtosRF,
     }));
   } catch { /* sem armazenamento: segue em memória */ }
 }
@@ -71,7 +72,9 @@ function carregarEstado() {
   return {
     perfil: salvo.perfil || { respostas: Array(Dados.QUESTOES.length).fill(null), id: null },
     carteira,
-    premissas: salvo.premissas || {},
+    // As premissas da primeira versão eram nominais; as atuais são reais. Por isso a chave mudou.
+    premissas: salvo.premissasReais || {},
+    produtosRF: Array.isArray(salvo.produtosRF) && salvo.produtosRF.length ? salvo.produtosRF : Dados.PRODUTOS_RF.map((p) => ({ ...p })),
     mercadoManual: salvo.mercado || null,
     bcb: null, // resposta do Banco Central
     cripto: null, // cotações da CoinGecko
@@ -84,10 +87,15 @@ const estado = carregarEstado();
 function mercado() {
   return { selic: num("selic"), cdi: num("cdi"), ipca: num("ipca") };
 }
+// Premissas reais por classe. A renda fixa pós segue o juro real de longo prazo da aba Projeção.
+function juroRealLongo() {
+  const v = parseFloat($("pj-juroreal").value);
+  return Number.isFinite(v) ? v : Dados.JURO_REAL_PADRAO;
+}
 function premissas() {
   const p = {};
   IDS.forEach((id) => (p[id] = { ...Dados.PREMISSAS[id], ...(estado.premissas[id] || {}) }));
-  p.cdi = { ...p.cdi, ret: mercado().cdi };
+  p.cdi = { ...p.cdi, ret: juroRealLongo() };
   return p;
 }
 function perfilAtual() {
@@ -178,7 +186,7 @@ function renderCartaoPerfil() {
     <div class="resumo">
       <div class="grafico rosca" id="g-perfil-mini"></div>
       <div>${listaAlocacao(perfil.alocacao, 6)}
-        <p class="nota" style="margin-top:10px">Retorno esperado ${pct(est.ret)} a.a. · volatilidade ${pct(est.vol)}</p>
+        <p class="nota" style="margin-top:10px">Retorno real esperado ${pct(est.ret)} a.a. acima da inflação · volatilidade ${pct(est.vol)}</p>
       </div>
     </div>
     <div class="acoes">
@@ -221,7 +229,7 @@ function renderMapa() {
   });
   Charts.dispersao($("g-mapa"), pontos, {
     altura: 340, raizX: true, ligar: "perfis", xFmt: (v) => v + "%", yFmt: (v) => v + "%",
-    xRotulo: "Volatilidade anual (risco)", yRotulo: "Retorno esperado ao ano", rotulo: "Mapa de risco e retorno",
+    xRotulo: "Volatilidade anual (risco)", yRotulo: "Retorno real ao ano", rotulo: "Mapa de risco e retorno",
   });
 }
 
@@ -296,12 +304,12 @@ function renderResultadoPerfil() {
       <div>${listaAlocacao(pf.alocacao)}</div>
     </div>
     <div class="kpis" style="margin-top:14px">
-      <div class="kpi"><span class="kpi-rotulo">Retorno esperado</span><span class="kpi-valor">${pct(est.ret)}</span><span class="kpi-sub">ao ano, premissa</span></div>
+      <div class="kpi"><span class="kpi-rotulo">Retorno real esperado</span><span class="kpi-valor">${pct(est.ret)}</span><span class="kpi-sub">ao ano, acima da inflação</span></div>
       <div class="kpi"><span class="kpi-rotulo">Volatilidade</span><span class="kpi-valor">${pct(est.vol)}</span><span class="kpi-sub">oscilação típica em 1 ano</span></div>
     </div>
     <p class="nota" style="margin-top:12px">Carteira educativa, não é recomendação. Ajuste à sua realidade.</p>
     <div class="acoes"><a class="botao" href="#projecao">Projetar esta carteira</a><a class="botao fantasma" href="#onde-investir">Onde investir</a></div>`;
-  Charts.rosca($("g-perfil"), IDS.map((c) => ({ nome: curtoClasse(c), valor: pf.alocacao[c], cor: corClasse(c) })), { valor: pct(est.ret, 1), rotulo: "ao ano" });
+  Charts.rosca($("g-perfil"), IDS.map((c) => ({ nome: curtoClasse(c), valor: pf.alocacao[c], cor: corClasse(c) })), { valor: pct(est.ret, 1), rotulo: "real ao ano" });
 }
 
 RENDER.perfil = renderResultadoPerfil;
@@ -345,20 +353,26 @@ function agendarProjecao() {
 function rodarProjecao() {
   const anos = Math.max(1, Math.min(40, Math.round(num("pj-anos")) || 1));
   const { aloc } = alocacaoProjecao();
+  const inflacao = num("pj-inflacao");
+  const descontarIR = $("pj-ir").checked;
   const m = mercado();
+  const hoje = Calc.juroReal(m.selic / 100, m.ipca / 100) * 100;
+  $("pj-juroreal-dica").textContent = `Hoje: ${pct(hoje)} (Selic menos IPCA). Média das últimas duas décadas: cerca de 4,5%. Juros altos assim costumam não durar.`;
   const r = Calc.monteCarlo({
     alocacao: aloc, premissas: premissas(), ids: IDS, correlacao: Dados.CORRELACAO,
-    inicial: num("pj-inicial"), mensal: num("pj-mensal"), anos, inflacao: m.ipca, sims: anos > 20 ? 1200 : 2000,
+    inicial: num("pj-inicial"), mensal: num("pj-mensal"), anos, inflacao, descontarIR, sims: anos > 20 ? 1200 : 2000,
   });
   $("g-proj").style.opacity = 1;
-  const real = (v) => v / r.deflator;
+  const anoFim = new Date().getFullYear() + anos;
+  const liq = descontarIR ? "líquido, " : "";
   $("pj-kpis").innerHTML = `
-    <div class="kpi principal"><span class="kpi-rotulo">Cenário mediano</span><span class="kpi-valor">${brl0(r.final.p50)}</span><span class="kpi-sub">${brl0(real(r.final.p50))} em reais de hoje</span></div>
+    <div class="kpi principal"><span class="kpi-rotulo">Cenário mediano</span><span class="kpi-valor">${brl0(r.final.p50)}</span><span class="kpi-sub">${liq}em reais de hoje · ≈ ${brlC(r.final.p50 * r.deflator)} em valores de ${anoFim}</span></div>
     <div class="kpi"><span class="kpi-rotulo">Cenário ruim (5%)</span><span class="kpi-valor">${brl0(r.final.p5)}</span><span class="kpi-sub">95% dos cenários terminam acima</span></div>
     <div class="kpi"><span class="kpi-rotulo">Cenário bom (95%)</span><span class="kpi-valor">${brl0(r.final.p95)}</span><span class="kpi-sub">só 5% terminam acima</span></div>
-    <div class="kpi"><span class="kpi-rotulo">Abaixo do investido</span><span class="kpi-valor ${r.probPerda > 0.05 ? "perda" : ""}">${pct(r.probPerda * 100, 1)}</span><span class="kpi-sub">${pct(r.probPerdaReal * 100, 1)} descontada a inflação</span></div>
+    <div class="kpi"><span class="kpi-rotulo">Abaixo do investido</span><span class="kpi-valor ${r.probPerda > 0.05 ? "perda" : ""}">${pct(r.probPerda * 100, 1)}</span><span class="kpi-sub">chance de perder poder de compra</span></div>
+    <div class="kpi"><span class="kpi-rotulo">Imposto no resgate</span><span class="kpi-valor">${descontarIR ? brl0(r.irMediano) : "não descontado"}</span><span class="kpi-sub">${descontarIR ? `${pct(r.aliquota * 100)} sobre o ganho nominal` : "marque a opção ao lado"} · custos de ${pct(r.custoMedio, 2)} a.a.</span></div>
     <div class="kpi"><span class="kpi-rotulo">Queda típica no caminho</span><span class="kpi-valor perda">${pct(r.quedaMediana * 100, 0)}</span><span class="kpi-sub">pior 5%: ${pct(r.quedaRuim * 100, 0)}</span></div>`;
-  $("pj-legenda-nota").textContent = `Total investido: ${brl0(r.investido)} · retorno esperado da carteira ${pct(r.retornoEsperado)} a.a. · IPCA ${pct(m.ipca)} a.a.`;
+  $("pj-legenda-nota").textContent = `Em reais de hoje. Investido: ${brl0(r.investido)}, com aportes corrigidos pela inflação de ${pct(inflacao)} a.a. Retorno real esperado da carteira: ${pct(r.retornoEsperado)} a.a., antes de custos e IR.`;
   const ac = css("--acento");
   $("pj-legenda").innerHTML = `<span><i class="traco" style="background:${ac}"></i>Mediana</span><span><i class="faixa" style="background:${ac};opacity:.35"></i>50% dos cenários</span><span><i class="faixa" style="background:${ac};opacity:.15"></i>90% dos cenários</span><span><i class="traco" style="background:${css("--tinta-3")}"></i>Investido</span>`;
   const s = r.serie;
@@ -366,7 +380,7 @@ function rodarProjecao() {
     altura: 320, x: s.map((p) => p.mes), xTicks: Math.min(anos + 1, 6),
     xFmt: (mes) => (mes === 0 ? "hoje" : Math.round(mes / 12) + (Math.round(mes / 12) === 1 ? " ano" : " anos")),
     xTooltip: (mes) => mes === 0 ? "Hoje" : `Após ${textoPrazo(mes)}`,
-    yFmt: brlC, rotulo: "Projeção do patrimônio",
+    yFmt: brlC, rotulo: "Projeção do patrimônio em reais de hoje",
     faixas: [
       { lo: s.map((p) => p.p5), hi: s.map((p) => p.p95), cor: ac, opacidade: 0.12 },
       { lo: s.map((p) => p.p25), hi: s.map((p) => p.p75), cor: ac, opacidade: 0.22 },
@@ -386,11 +400,13 @@ function rodarProjecao() {
 
 function renderPremissas() {
   const p = premissas();
-  $("tab-premissas").innerHTML = `<thead><tr><th>Classe</th><th>Retorno a.a.</th><th>Volatilidade</th></tr></thead><tbody>` +
+  const campo = (c, nome, passo, extra = "") =>
+    `<td><input type="number" step="${passo}" id="pm-${nome}-${c.id}" data-id="${c.id}" data-campo="${nome}" value="${p[c.id][nome]}" ${extra} aria-label="${nome} de ${esc(c.nome)}" /></td>`;
+  $("tab-premissas").innerHTML = `<thead><tr><th>Classe</th><th>Retorno real a.a.</th><th>Volatilidade</th><th>Custo a.a.</th><th>IR no resgate</th></tr></thead><tbody>` +
     CLASSES.map((c) => `<tr>
       <td><span class="nome-classe"><span class="ponto" style="background:${corClasse(c.id)}"></span>${esc(c.nome)}</span></td>
-      <td><input type="number" step="0.5" id="pm-ret-${c.id}" data-id="${c.id}" data-campo="ret" value="${p[c.id].ret}" ${c.id === "cdi" ? "disabled title=\"Vem do CDI da aba Renda fixa\"" : ""} aria-label="Retorno de ${esc(c.nome)}" /></td>
-      <td><input type="number" step="0.5" min="0" id="pm-vol-${c.id}" data-id="${c.id}" data-campo="vol" value="${p[c.id].vol}" aria-label="Volatilidade de ${esc(c.nome)}" /></td>
+      ${campo(c, "ret", 0.5, c.id === "cdi" ? 'disabled title="Segue o juro real de longo prazo"' : "")}
+      ${campo(c, "vol", 0.5, 'min="0"')}${campo(c, "custo", 0.05, 'min="0"')}${campo(c, "ir", 0.5, 'min="0" max="30"')}
     </tr>`).join("") + "</tbody>";
 }
 
@@ -411,7 +427,9 @@ function renderHistorico() {
   const anos = Dados.ANOS.slice(desde);
   const ipca = Dados.IPCA.slice(desde);
   const real = $("ht-real").checked;
+  const liquido = $("ht-custos").checked;
   const log = $("ht-log").checked;
+  const pr = premissas();
   const inicial = num("ht-inicial"), mensal = num("ht-mensal");
   const marcados = [...$("ht-classes").querySelectorAll("input[type=checkbox]:checked")].map((i) => i.value).filter((v) => v !== "on");
   const historicos = {};
@@ -420,9 +438,17 @@ function renderHistorico() {
 
   const linhas = marcados.map((id) => {
     const rets = id === "carteira" ? Calc.retornosCarteira(pf.alocacao, historicos) : historicos[id];
-    const pts = Calc.backtest({ retornosPct: rets, inicial, mensal, inflacaoPct: ipca });
+    // Custo e alíquota de IR: da classe, ou a média ponderada pela carteira.
+    const media = (campo) => IDS.reduce((s, c) => s + (pf.alocacao[c] / 100) * pr[c][campo], 0);
+    const custo = liquido ? (id === "carteira" ? media("custo") : pr[id].custo) : 0;
+    const aliq = liquido ? (id === "carteira" ? media("ir") : pr[id].ir) / 100 : 0;
+    const pts = Calc.backtest({ retornosPct: rets, inicial, mensal, inflacaoPct: ipca, custoPct: custo });
+    const ult = pts.at(-1);
+    const ir = aliq * Math.max(0, ult.saldo - ult.investido);
     return {
-      id, rets, pts,
+      id, rets, pts, ir, aliq,
+      liquidoFinal: (ult.saldo - ir) / (real ? ult.deflator : 1),
+      retsLiq: rets.map((r) => ((1 + r / 100) * (1 - custo / 100) - 1) * 100),
       nome: id === "carteira" ? `Carteira ${pf.nome.toLowerCase()}` : classe(id).curto,
       cor: id === "carteira" ? css("--tinta") : corClasse(id),
       valores: pts.map((p) => (real ? p.real : p.saldo)),
@@ -434,7 +460,9 @@ function renderHistorico() {
   const investido = Calc.backtest({ retornosPct: anos.map(() => 0), inicial, mensal });
   const rotulos = ["jan/" + inicio, ...anos.map((a) => "dez/" + a)];
   $("ht-titulo").textContent = real ? "Patrimônio acumulado, em reais de " + inicio : "Patrimônio acumulado";
-  $("ht-nota").textContent = `${brl0(inicial)} no início e ${brl0(mensal)} por mês, de janeiro de ${inicio} a dezembro de 2024.` + (log ? " Escala logarítmica: cada linha de grade é um múltiplo do valor." : "");
+  $("ht-nota").textContent = `${brl0(inicial)} no início e ${brl0(mensal)} por mês, de janeiro de ${inicio} a dezembro de 2024.` +
+    (liquido ? " Custos anuais já descontados nas linhas; IR do resgate na tabela." : " Sem custos nem IR.") +
+    (log ? " Escala logarítmica: cada linha de grade é um múltiplo do valor." : "");
   $("ht-legenda").innerHTML = linhas.map((l) => `<span><i class="traco" style="background:${l.cor}"></i>${esc(l.nome)}</span>`).join("") +
     `<span><i class="traco" style="background:${css("--tinta-3")};opacity:.6"></i>Investido</span>`;
 
@@ -459,17 +487,16 @@ function renderHistorico() {
     yTicks: log ? ticksLog : null,
   });
 
-  const totalInv = invVals[invVals.length - 1];
-  const ordenadas = [...linhas].sort((a, b) => b.valores.at(-1) - a.valores.at(-1));
-  $("tab-hist").innerHTML = `<thead><tr><th>Opção</th><th>Valor final${real ? " (real)" : ""}</th><th>Lucro nominal</th><th>Ao ano</th><th>Pior ano</th><th>Maior queda</th></tr></thead><tbody>` +
+  const ordenadas = [...linhas].sort((a, b) => b.liquidoFinal - a.liquidoFinal);
+  const sufixo = real ? ` (reais de ${inicio})` : "";
+  $("tab-hist").innerHTML = `<thead><tr><th>Opção</th><th>Valor final${sufixo}</th>${liquido ? "<th>IR no resgate</th><th>Líquido</th>" : ""}<th>Ao ano</th><th>Pior ano</th><th>Maior queda</th></tr></thead><tbody>` +
     ordenadas.map((l, i) => {
-      const e = Calc.estatisticas(l.rets);
-      const fim = l.valores.at(-1);
-      const lucro = l.pts.at(-1).saldo - totalInv;
+      const e = Calc.estatisticas(l.retsLiq);
+      const fator = real ? l.pts.at(-1).deflator : 1;
       return `<tr class="${i === 0 ? "melhor" : ""}">
         <td><span class="nome-classe"><span class="ponto" style="background:${l.cor}"></span>${esc(l.nome)}</span></td>
-        <td>${brl0(fim)}</td>
-        <td class="${classeVar(lucro)}">${brl0(lucro)}</td>
+        <td>${brl0(l.valores.at(-1))}</td>
+        ${liquido ? `<td>${l.ir > 0 ? "−" + brl0(l.ir / fator) : brl0(0)}</td><td><b>${brl0(l.liquidoFinal)}</b></td>` : ""}
         <td>${pct(e.cagr * 100, 1)}</td>
         <td class="${classeVar(e.pior)}">${pct(e.pior * 100, 1, true)}</td>
         <td class="${e.quedaMax < 0 ? "desce" : ""}">${e.quedaMax < 0 ? pct(e.quedaMax * 100, 0) : "nenhuma"}</td>
@@ -571,20 +598,95 @@ async function carregarCripto() {
 }
 
 // ============ RENDA FIXA ============
+const TIPOS_RF = { cdi: "% do CDI", selic: "% da Selic", poupanca: "Poupança" };
+const mktRF = () => ({ cdi: num("cdi") / 100, selic: num("selic") / 100 });
+const corProduto = (i) => css(`--s${(i % 8) + 1}`);
+const produtosValidos = () => estado.produtosRF.filter((p) => p.nome.trim() && (p.tipo === "poupanca" || p.pct > 0));
+
+function descricaoProduto(p) {
+  const partes = [p.tipo === "poupanca" ? "Regra da poupança" : `${pct(p.pct, 0)} ${p.tipo === "selic" ? "da Selic" : "do CDI"}`];
+  if (p.isento) partes.push("isento de IR");
+  if (p.teto > 0) partes.push(`até ${brl0(p.teto)}; acima, ${pct(p.pctAcima, 0)} do CDI`);
+  if (p.carencia > 0) partes.push(`carência de ${p.carencia} meses`);
+  return partes.join(" · ");
+}
+
+function renderProdutos() {
+  $("tab-produtos").innerHTML = `<thead><tr><th>Produto</th><th>Índice</th><th>Taxa (%)</th><th>Isento</th><th>Teto (R$)</th><th>Acima do teto</th><th>Carência (meses)</th><th></th></tr></thead><tbody>` +
+    estado.produtosRF.map((p, i) => `<tr>
+      <td><input type="text" id="rf-${i}-nome" data-i="${i}" data-campo="nome" value="${esc(p.nome)}" aria-label="Nome do produto" /></td>
+      <td><select id="rf-${i}-tipo" data-i="${i}" data-campo="tipo" aria-label="Índice de ${esc(p.nome)}">${Object.entries(TIPOS_RF).map(([k, v]) => `<option value="${k}" ${p.tipo === k ? "selected" : ""}>${v}</option>`).join("")}</select></td>
+      <td><input type="number" id="rf-${i}-pct" data-i="${i}" data-campo="pct" value="${p.pct}" min="0" step="1" ${p.tipo === "poupanca" ? "disabled" : ""} aria-label="Taxa de ${esc(p.nome)}" /></td>
+      <td class="centro"><input type="checkbox" id="rf-${i}-isento" data-i="${i}" data-campo="isento" ${p.isento ? "checked" : ""} aria-label="${esc(p.nome)} é isento de IR" /></td>
+      <td><input type="number" id="rf-${i}-teto" data-i="${i}" data-campo="teto" value="${p.teto}" min="0" step="500" aria-label="Teto de ${esc(p.nome)}" /></td>
+      <td><input type="number" id="rf-${i}-pctAcima" data-i="${i}" data-campo="pctAcima" value="${p.pctAcima}" min="0" step="1" ${p.teto > 0 ? "" : "disabled"} aria-label="Taxa acima do teto de ${esc(p.nome)}" /></td>
+      <td><input type="number" id="rf-${i}-carencia" data-i="${i}" data-campo="carencia" value="${p.carencia}" min="0" step="1" aria-label="Carência de ${esc(p.nome)}" /></td>
+      <td><button type="button" data-remover-rf="${i}" aria-label="Remover ${esc(p.nome)}">✕</button></td>
+    </tr>`).join("") + "</tbody>";
+}
+
+function renderPlano() {
+  const meses = Math.max(1, Math.min(600, Math.round(num("meses"))));
+  const soLiquidez = $("rf-liquidez").checked;
+  const mkt = mktRF();
+  const base = { inicial: num("inicial"), mensal: num("mensal"), meses, ...mkt, inflacao: num("ipca") / 100 };
+  const candidatos = produtosValidos().filter((p) => !soLiquidez || !(p.carencia > 0));
+  const plano = candidatos.length ? Calc.simularPlano({ ...base, produtos: candidatos }) : null;
+  if (!plano) {
+    $("plano-kpis").innerHTML = "";
+    $("tab-plano").innerHTML = `<tbody><tr><td><div class="vazio-estado">Nenhum produto disponível para esse prazo. Cadastre um produto sem carência ou aumente o prazo.</div></td></tr></tbody>`;
+    $("plano-nota").textContent = "";
+    return;
+  }
+  // Comparação: o melhor produto sozinho (com todo o dinheiro).
+  const sozinhos = candidatos.map((p) => ({ p, r: Calc.simularPlano({ ...base, produtos: [p], distribuir: false }) })).filter((x) => x.r);
+  const melhorSozinho = sozinhos.reduce((a, b) => (b.r.liquido > a.r.liquido ? b : a));
+  const ganho = plano.liquido - melhorSozinho.r.liquido;
+  const fora = [...plano.foraPorCarencia, ...(soLiquidez ? produtosValidos().filter((p) => p.carencia > 0) : [])];
+  $("plano-nota").textContent = `Cada aporte vai para o produto com o melhor rendimento líquido no prazo de ${textoPrazo(meses)}. Quando um produto atinge o teto, o restante segue para o próximo.` +
+    (fora.length ? ` Fora do plano: ${[...new Set(fora.map((p) => p.nome))].join(", ")} (${soLiquidez ? "sem liquidez diária" : "carência maior que o prazo"}).` : "");
+  $("plano-kpis").innerHTML = `
+    <div class="kpi principal"><span class="kpi-rotulo">Líquido no fim</span><span class="kpi-valor">${brl0(plano.liquido)}</span><span class="kpi-sub">${brl0(plano.real)} em reais de hoje</span></div>
+    <div class="kpi"><span class="kpi-rotulo">Lucro líquido</span><span class="kpi-valor ganho">${brl0(plano.lucroLiquido)}</span><span class="kpi-sub">sobre ${brl0(plano.investido)} investidos</span></div>
+    <div class="kpi"><span class="kpi-rotulo">IR pago</span><span class="kpi-valor">${brl0(plano.ir)}</span><span class="kpi-sub">calculado aporte por aporte</span></div>
+    <div class="kpi"><span class="kpi-rotulo">A mais que o melhor sozinho</span><span class="kpi-valor ${ganho > 0.5 ? "ganho" : ""}">${ganho > 0.5 ? "+" + brl0(ganho) : brl0(0)}</span><span class="kpi-sub">vs. tudo em ${esc(melhorSozinho.p.nome)}</span></div>`;
+  const ativos = plano.porProduto.filter((x) => x.aportado > 0.5);
+  $("tab-plano").innerHTML = `<thead><tr><th>Ordem</th><th>Aplicar</th><th>Bruto no fim</th><th>IR</th><th>Líquido</th></tr></thead><tbody>` +
+    ativos.map((x, i) => `<tr>
+      <td><span class="nome-classe"><span class="ponto" style="background:${corProduto(estado.produtosRF.indexOf(x.prod))}"></span><span>${i + 1}. ${esc(x.prod.nome)}<span class="sub">${esc(descricaoProduto(x.prod))}</span></span></span></td>
+      <td>${brl0(x.aportado)}${x.prod.teto > 0 && x.aportado >= x.prod.teto - 0.5 ? '<span class="etiqueta">teto</span>' : ""}</td>
+      <td>${brl0(x.bruto)}</td><td>${x.ir > 0 ? "−" + brl0(x.ir) : brl0(0)}</td><td><b>${brl0(x.liquido)}</b></td>
+    </tr>`).join("") + "</tbody>";
+}
+
+function renderEquivalencia() {
+  const mkt = mktRF();
+  const prazos = [6, 12, 24, 36];
+  const lista = produtosValidos();
+  const vals = lista.map((p) => prazos.map((m) => (p.carencia > m ? null : Calc.equivalenteLiquido(p, m, mkt))));
+  const melhores = prazos.map((_, j) => Math.max(...vals.map((v) => v[j] ?? -Infinity)));
+  $("tab-equiv").innerHTML = `<thead><tr><th>Produto</th>${prazos.map((m) => `<th>${textoPrazo(m)}</th>`).join("")}</tr></thead><tbody>` +
+    lista.map((p, i) => `<tr><td><span class="nome-classe"><span class="ponto" style="background:${corProduto(estado.produtosRF.indexOf(p))}"></span><span>${esc(p.nome)}<span class="sub">${esc(descricaoProduto(p))}${p.teto > 0 ? " · taxa válida até o teto" : ""}</span></span></span></td>` +
+      vals[i].map((v, j) => v === null ? `<td class="fora">carência</td>` : `<td class="${Math.abs(v - melhores[j]) < 1e-9 ? "vencedor" : ""}">${pct(v)}</td>`).join("") + "</tr>").join("") + "</tbody>";
+}
+
 function atualizarSimulador() {
   const meses = Math.max(1, Math.min(600, Math.round(num("meses"))));
-  const base = { inicial: num("inicial"), mensal: num("mensal"), meses, inflacao: num("ipca") / 100 };
-  const lista = Calc.produtos({ selic: num("selic") / 100, cdi: num("cdi") / 100, pctCdb: num("pctCdb") / 100, pctLci: num("pctLci") / 100 });
-  const cores = ["--s0", "--s1", "--s2", "--s3"];
-  const res = lista.map((p, i) => ({ ...p, cor: css(cores[i]), r: Calc.simular({ ...base, ...p }) }));
-  const melhor = res.reduce((a, b) => (b.r.liquido > a.r.liquido ? b : a));
+  const base = { inicial: num("inicial"), mensal: num("mensal"), meses, ...mktRF(), inflacao: num("ipca") / 100 };
+  renderPlano();
+  renderEquivalencia();
+  const res = produtosValidos()
+    .map((p) => ({ p, cor: corProduto(estado.produtosRF.indexOf(p)), r: Calc.simularPlano({ ...base, produtos: [p], distribuir: false }) }))
+    .filter((x) => x.r);
   $("prazo-txt").textContent = textoPrazo(meses);
-  $("total-investido").textContent = brl(res[0].r.investido);
-  $("tabela-res").innerHTML = res.map((p) => `<tr class="${p === melhor ? "melhor" : ""}">
-      <td><span class="nome-classe"><span class="ponto" style="background:${p.cor}"></span>${esc(p.nome)}</span></td>
-      <td>${brl(p.r.bruto)}</td><td>${brl(p.r.ir)}</td><td>${brl(p.r.liquido)}</td><td>${brl(p.r.lucroLiquido)}</td>
-      <td class="${p.r.real < p.r.investido ? "perda" : ""}">${brl(p.r.real)}</td></tr>`).join("");
-  $("legenda").innerHTML = res.map((p) => `<span><i class="traco" style="background:${p.cor}"></i>${esc(p.nome)}</span>`).join("") +
+  $("total-investido").textContent = brl(base.inicial + base.mensal * meses);
+  if (!res.length) { $("tabela-res").innerHTML = ""; $("grafico").innerHTML = ""; $("legenda").innerHTML = ""; return; }
+  const melhor = res.reduce((a, b) => (b.r.liquido > a.r.liquido ? b : a));
+  $("tabela-res").innerHTML = res.map((x) => `<tr class="${x === melhor ? "melhor" : ""}">
+      <td><span class="nome-classe"><span class="ponto" style="background:${x.cor}"></span>${esc(x.p.nome)}</span></td>
+      <td>${brl0(x.r.bruto)}</td><td>${brl0(x.r.ir)}</td><td>${brl0(x.r.liquido)}</td><td>${brl0(x.r.lucroLiquido)}</td>
+      <td class="${x.r.real < x.r.investido ? "perda" : ""}">${brl0(x.r.real)}</td></tr>`).join("");
+  $("legenda").innerHTML = res.map((x) => `<span><i class="traco" style="background:${x.cor}"></i>${esc(x.p.nome)}</span>`).join("") +
     `<span><i class="traco" style="background:${css("--tinta-3")};opacity:.6"></i>Valor investido</span>`;
   const ev = res[0].r.evolucao;
   Charts.linhas($("grafico"), {
@@ -592,9 +694,9 @@ function atualizarSimulador() {
     xFmt: (m) => (m === 0 ? "hoje" : m + " m"), xTooltip: (m) => (m === 0 ? "Hoje" : `Mês ${m}`),
     series: [
       { nome: "Investido", cor: css("--tinta-3"), valores: ev.map((e) => e.investido), tracejado: true, largura: 1.5 },
-      ...res.map((p) => ({ nome: p.nome, cor: p.cor, valores: p.r.evolucao.map((e) => e.saldo) })),
+      ...res.map((x) => ({ nome: x.p.nome, cor: x.cor, valores: x.r.evolucao.map((e) => e.saldo) })),
     ],
-    linhasTooltip: (i) => [...res.map((p) => ({ cor: p.cor, nome: p.nome, valor: brl(p.r.evolucao[i].saldo) })), { cor: css("--tinta-3"), nome: "Investido", valor: brl(ev[i].investido) }],
+    linhasTooltip: (i) => [...res.map((x) => ({ cor: x.cor, nome: x.p.nome, valor: brl(x.r.evolucao[i].saldo) })), { cor: css("--tinta-3"), nome: "Investido", valor: brl(ev[i].investido) }],
   });
 }
 
@@ -608,7 +710,7 @@ function atualizarMeta() {
     : m === 0 ? "Você já atingiu essa meta." : `Você chega lá em<span class="grande">${textoPrazo(m)}</span>`;
 }
 
-RENDER["renda-fixa"] = () => { atualizarSimulador(); atualizarReserva(); atualizarMeta(); };
+RENDER["renda-fixa"] = () => { renderProdutos(); atualizarSimulador(); atualizarReserva(); atualizarMeta(); };
 
 async function carregarTaxas() {
   const status = $("status-taxas");
@@ -744,7 +846,7 @@ function ligarEventos() {
   $("tab-premissas").addEventListener("change", (e) => {
     const { id, campo } = e.target.dataset;
     if (!id) return;
-    estado.premissas[id] = { ...(estado.premissas[id] || {}), [campo]: Math.max(campo === "vol" ? 0 : -50, parseFloat(e.target.value) || 0) };
+    estado.premissas[id] = { ...(estado.premissas[id] || {}), [campo]: Math.max(campo === "ret" ? -50 : 0, parseFloat(e.target.value) || 0) };
     gravar();
     agendarProjecao();
   });
@@ -761,6 +863,38 @@ function ligarEventos() {
   $("form-sim").addEventListener("input", (e) => {
     if (["selic", "cdi", "ipca"].includes(e.target.id)) aoMudarMercado();
     else atualizarSimulador();
+  });
+  const editarProduto = (e, redesenhar) => {
+    const { i, campo } = e.target.dataset;
+    if (i === undefined || !campo) return;
+    const p = estado.produtosRF[+i];
+    if (campo === "nome") p.nome = e.target.value;
+    else if (campo === "tipo") p.tipo = e.target.value;
+    else if (campo === "isento") p.isento = e.target.checked;
+    else p[campo] = Math.max(0, parseFloat(e.target.value) || 0);
+    gravar();
+    if (redesenhar) renderProdutos();
+    atualizarSimulador();
+  };
+  $("tab-produtos").addEventListener("input", (e) => editarProduto(e, false));
+  // Mudanças que habilitam ou desabilitam campos redesenham a tabela.
+  $("tab-produtos").addEventListener("change", (e) => {
+    if (["tipo", "teto"].includes(e.target.dataset.campo)) { editarProduto(e, true); }
+  });
+  $("tab-produtos").addEventListener("click", (e) => {
+    const i = e.target.closest("[data-remover-rf]")?.dataset.removerRf;
+    if (i === undefined) return;
+    estado.produtosRF.splice(+i, 1);
+    gravar(); renderProdutos(); atualizarSimulador();
+  });
+  $("rf-adicionar").addEventListener("click", () => {
+    estado.produtosRF.push({ id: "p" + Date.now(), nome: "Novo CDB", tipo: "cdi", pct: 105, isento: false, teto: 0, pctAcima: 100, carencia: 0 });
+    gravar(); renderProdutos(); atualizarSimulador();
+    $(`rf-${estado.produtosRF.length - 1}-nome`).select();
+  });
+  $("rf-restaurar").addEventListener("click", () => {
+    estado.produtosRF = Dados.PRODUTOS_RF.map((p) => ({ ...p }));
+    gravar(); renderProdutos(); atualizarSimulador();
   });
   $("btn-taxas").addEventListener("click", carregarTaxas);
   $("form-reserva").addEventListener("input", atualizarReserva);

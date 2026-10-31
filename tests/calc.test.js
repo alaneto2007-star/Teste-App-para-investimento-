@@ -120,4 +120,57 @@ perto(reb2.a, 700);
 for (const c of Dados.CLASSES) assert.strictEqual(c.hist.length, Dados.ANOS.length, c.id);
 assert.strictEqual(Dados.IPCA.length, Dados.ANOS.length);
 
+// ---------- Novos: % do CDI diário, plano com teto, IR por aporte, projeção real com IR ----------
+// 100% do CDI = o próprio CDI; 115% de 14,9% ≈ 17,36% (sobre a taxa diária), maior que 1,15 × 14,9% = 17,135%
+perto(Calc.taxaPctCDI(0.149, 100), 0.149, 1e-12);
+perto(Calc.taxaPctCDI(0.149, 115), 0.1736, 0.0005);
+assert.ok(Calc.taxaPctCDI(0.149, 115) > 0.149 * 1.15);
+
+const mkt = { cdi: 0.149, selic: 0.15 };
+const [poup, selic, cdb100, turbo, lci] = Dados.PRODUTOS_RF;
+// Equivalência líquida: CDB 100% por 3 anos ≈ 87,4% do CDI líquido (o IR só é pago no resgate, então
+// o valor do imposto também rende até lá; por isso fica acima da regra de bolso de 85%). LCI 90% isenta = 90%.
+const bruto3 = Math.pow(1.149, 3), liq3 = Math.pow(1 + (bruto3 - 1) * 0.85, 1 / 3) - 1;
+perto(Calc.equivalenteLiquido(cdb100, 36, mkt), ((Math.pow(1 + liq3, 1 / 252) - 1) / (Math.pow(1.149, 1 / 252) - 1)) * 100, 1e-9);
+perto(Calc.equivalenteLiquido(cdb100, 36, mkt), 87.4, 0.1);
+perto(Calc.equivalenteLiquido(lci, 36, mkt), 90, 0.01);
+// Em 3 meses, 115% tributado a 22,5% fica abaixo de 90% isento
+assert.ok(Calc.equivalenteLiquido(turbo, 3, mkt) < 90);
+
+// Plano: R$ 20 mil em 12 meses com teto de R$ 5 mil na caixinha 115%: só 5 mil vão para ela
+const plano = Calc.simularPlano({ produtos: [cdb100, turbo], inicial: 20000, mensal: 0, meses: 12, ...mkt });
+const pTurbo = plano.porProduto.find((p) => p.prod.id === "turbo");
+const pCdb = plano.porProduto.find((p) => p.prod.id === "cdb100");
+perto(pTurbo.aportado, 5000);
+perto(pCdb.aportado, 15000);
+assert.strictEqual(plano.porProduto[0].prod.id, "turbo"); // melhor taxa vem primeiro
+// Caixinha sozinha com R$ 20 mil: 5 mil a 115% e 15 mil a 100% => igual ao plano acima
+const sozinho = Calc.simularPlano({ produtos: [turbo], inicial: 20000, mensal: 0, meses: 12, ...mkt, distribuir: false });
+perto(sozinho.bruto, plano.bruto, 0.5);
+// IR: 1 ano => 20% sobre o ganho
+perto(pCdb.ir, (pCdb.bruto - 15000) * 0.2, 0.01);
+// Sem aportes mensais o resultado bate com a fórmula fechada
+perto(pCdb.bruto, 15000 * 1.149, 0.01);
+// Aporte feito no último mês paga 22,5% e o inicial paga a faixa do prazo total
+const lotes = Calc.simularPlano({ produtos: [cdb100], inicial: 1000, mensal: 1000, meses: 30, ...mkt });
+assert.ok(lotes.ir > 0 && lotes.liquido < lotes.bruto);
+// LCI com carência de 12 meses fica de fora num prazo de 6 meses
+const curto = Calc.simularPlano({ produtos: [lci, cdb100], inicial: 1000, mensal: 0, meses: 6, ...mkt });
+assert.strictEqual(curto.porProduto.length, 1);
+assert.strictEqual(curto.foraPorCarencia[0].id, "lci");
+
+// Backtest com custo de 1% a.a.: 1000 a +10% por 1 ano => 1089
+perto(Calc.backtest({ retornosPct: [10], inicial: 1000, mensal: 0, custoPct: 1 })[1].saldo, 1089);
+
+// Projeção real: juro real 0%, inflação 10%, IR 15% => o IR sobre a inflação gera perda real
+const pr = { ...Dados.PREMISSAS, cdi: { ret: 0, vol: 0.001, custo: 0, ir: 15 } };
+const sem = Calc.monteCarlo({ alocacao: { cdi: 100 }, premissas: pr, ids, correlacao: Dados.CORRELACAO, inicial: 1000, mensal: 0, anos: 1, inflacao: 10, sims: 200 });
+perto(sem.final.p50, 1000, 0.5);
+const com = Calc.monteCarlo({ alocacao: { cdi: 100 }, premissas: pr, ids, correlacao: Dados.CORRELACAO, inicial: 1000, mensal: 0, anos: 1, inflacao: 10, descontarIR: true, sims: 200 });
+perto(com.final.p50, (1100 - 15) / 1.1, 0.5); // 986,36 em reais de hoje
+assert.ok(com.probPerda > 0.9);
+// Custo de 1% a.a. reduz o retorno real na mesma proporção
+const custo = Calc.monteCarlo({ alocacao: { cdi: 100 }, premissas: { ...pr, cdi: { ret: 0, vol: 0.001, custo: 1, ir: 0 } }, ids, correlacao: Dados.CORRELACAO, inicial: 1000, mensal: 0, anos: 1, sims: 200 });
+perto(custo.final.p50, 990, 0.5);
+
 console.log("Todos os testes passaram.");

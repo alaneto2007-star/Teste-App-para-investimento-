@@ -74,18 +74,33 @@
     { ativo: "Ethereum", periodo: "nov/2021 a jun/2022", queda: -80 },
   ];
 
-  // Premissas para a projeção (Monte Carlo): retorno anual mediano esperado e volatilidade anual, em R$.
-  // "cdi" é substituído pelo CDI atual informado pelo usuário/Banco Central.
+  // Premissas da projeção, em TERMOS REAIS (acima da inflação), por classe:
+  // ret = retorno real anual mediano esperado; vol = volatilidade anual;
+  // custo = custos anuais (taxa de ETF, custódia, spread); ir = alíquota de IR sobre o ganho nominal no resgate.
+  // O retorno real do CDI vem do "juro real de longo prazo" informado na projeção.
+  const JURO_REAL_PADRAO = 4.5; // média aproximada do CDI acima do IPCA nas últimas duas décadas
+  const INFLACAO_PADRAO = 4.0; // inflação de longo prazo esperada
   const PREMISSAS = {
-    cdi: { ret: 14.9, vol: 0.5 },
-    ipca: { ret: 11.5, vol: 9 },
-    ibov: { ret: 14, vol: 24 },
-    ifix: { ret: 12, vol: 13 },
-    sp500: { ret: 12, vol: 19 },
-    ouro: { ret: 8, vol: 17 },
-    btc: { ret: 20, vol: 65 },
-    eth: { ret: 20, vol: 85 },
+    cdi: { ret: JURO_REAL_PADRAO, vol: 1.5, custo: 0.1, ir: 15 }, // custódia do Tesouro Selic acima de R$ 10 mil
+    ipca: { ret: 5.5, vol: 9, custo: 0.2, ir: 15 }, // custódia B3 do Tesouro
+    ibov: { ret: 6.5, vol: 24, custo: 0.2, ir: 15 }, // ETFs (BOVA11 ≈ 0,10%; SMAL11 ≈ 0,50%)
+    ifix: { ret: 5.5, vol: 13, custo: 0, ir: 6 }, // rendimentos isentos; IR de 20% só sobre a valorização das cotas
+    sp500: { ret: 6, vol: 19, custo: 0.4, ir: 15 }, // ETF (≈ 0,23%) + custo de câmbio
+    ouro: { ret: 2.5, vol: 17, custo: 0.3, ir: 15 },
+    btc: { ret: 10, vol: 65, custo: 0.8, ir: 15 }, // spread de compra e venda ou taxa de ETF
+    eth: { ret: 10, vol: 85, custo: 0.8, ir: 15 },
   };
+
+  // Produtos de renda fixa padrão para o simulador. tipo: "cdi" (% do CDI), "selic" (% da Selic) ou "poupanca".
+  // teto: saldo máximo que rende a taxa principal (0 = sem teto); pctAcima: % do CDI sobre o que passar do teto;
+  // carencia: meses mínimos antes do resgate.
+  const PRODUTOS_RF = [
+    { id: "poupanca", nome: "Poupança", tipo: "poupanca", pct: 100, isento: true, teto: 0, pctAcima: 100, carencia: 0, liquidez: "Diária" },
+    { id: "selic", nome: "Tesouro Selic", tipo: "selic", pct: 100, isento: false, teto: 0, pctAcima: 100, carencia: 0, liquidez: "D+1" },
+    { id: "cdb100", nome: "CDB liquidez diária", tipo: "cdi", pct: 100, isento: false, teto: 0, pctAcima: 100, carencia: 0, liquidez: "Diária" },
+    { id: "turbo", nome: "Caixinha Nubank 115% (até R$ 5 mil)", tipo: "cdi", pct: 115, isento: false, teto: 5000, pctAcima: 100, carencia: 0, liquidez: "Diária" },
+    { id: "lci", nome: "LCI/LCA", tipo: "cdi", pct: 90, isento: true, teto: 0, pctAcima: 90, carencia: 12, liquidez: "No vencimento" },
+  ];
 
   // Correlações aproximadas entre as classes (em R$). Ordem igual a CLASSES.
   const CORRELACAO = [
@@ -177,7 +192,7 @@
     { nome: "Day trade e alavancagem", classe: "ibov", risco: 5, liquidez: "Imediata", ir: "20% sobre o lucro", minimo: "Margem na corretora", para: "Quase ninguém. Estudo da FGV (2019) mostrou que 97% dos que insistiram por mais de 300 dias perderam dinheiro.", cuidado: "Alavancagem pode zerar a conta e gerar dívida." },
   ];
 
-  const Dados = { ANOS, DOLAR, IPCA, CLASSES, QUEDAS_CRIPTO, PREMISSAS, CORRELACAO, PERFIS, QUESTOES, INSTRUMENTOS };
+  const Dados = { ANOS, DOLAR, IPCA, CLASSES, QUEDAS_CRIPTO, PREMISSAS, JURO_REAL_PADRAO, INFLACAO_PADRAO, PRODUTOS_RF, CORRELACAO, PERFIS, QUESTOES, INSTRUMENTOS };
   if (typeof module !== "undefined" && module.exports) module.exports = Dados;
   else root.Dados = Dados;
 })(typeof window !== "undefined" ? window : globalThis);

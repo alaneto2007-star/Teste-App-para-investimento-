@@ -84,6 +84,88 @@
     return m;
   }
 
+  // Taxa anual de um título que paga pct% do CDI (ou da Selic). O percentual incide sobre a taxa DIÁRIA
+  // (252 dias úteis), como fazem bancos e corretoras: 115% do CDI de 14,9% dá ≈ 17,4% a.a., não 17,1%.
+  function taxaPctCDI(indiceAnual, pct) {
+    const diaria = Math.pow(1 + indiceAnual, 1 / 252) - 1;
+    return Math.pow(1 + (diaria * pct) / 100, 252) - 1;
+  }
+
+  // Taxa anual bruta de um produto de renda fixa. acima = true usa a taxa do saldo que passa do teto.
+  function taxaProduto(prod, { cdi, selic }, acima = false) {
+    if (prod.tipo === "poupanca") return taxaPoupanca(selic);
+    if (acima) return taxaPctCDI(cdi, prod.pctAcima ?? 100);
+    return taxaPctCDI(prod.tipo === "selic" ? selic : cdi, prod.pct);
+  }
+
+  // Rendimento líquido de IR, expresso em % do CDI, para um prazo em meses (ignora o teto).
+  function equivalenteLiquido(prod, meses, mkt) {
+    const r = taxaProduto(prod, mkt);
+    const ganho = Math.pow(1 + r, meses / 12) - 1;
+    const aliq = prod.isento ? 0 : aliquotaIR(meses);
+    const liquidoAnual = Math.pow(1 + ganho * (1 - aliq), 12 / meses) - 1;
+    const d = (x) => Math.pow(1 + x, 1 / 252) - 1;
+    return (d(liquidoAnual) / d(mkt.cdi)) * 100;
+  }
+
+  // Simula um ou mais produtos de renda fixa com aporte inicial e mensal.
+  // distribuir = true: cada aporte vai para o produto com melhor rendimento líquido no prazo, respeitando o teto
+  // (o que não cabe vai para o próximo). Produtos com carência maior que o prazo ficam de fora.
+  // distribuir = false: todo o dinheiro vai para o primeiro produto; o saldo acima do teto rende pctAcima.
+  // O IR é calculado por aporte, conforme o tempo que cada um ficou aplicado (tabela regressiva).
+  function simularPlano({ produtos, inicial, mensal, meses, cdi, selic, inflacao = 0, distribuir = true }) {
+    const mkt = { cdi, selic };
+    const validos = produtos.filter((p) => (p.carencia || 0) <= meses);
+    const ordem = distribuir
+      ? [...validos].sort((a, b) => equivalenteLiquido(b, meses, mkt) - equivalenteLiquido(a, meses, mkt))
+      : validos.slice(0, 1);
+    if (!ordem.length) return null;
+    const st = ordem.map((p) => ({
+      prod: p, saldo: 0, lotes: [],
+      i1: Math.pow(1 + taxaProduto(p, mkt), 1 / 12) - 1,
+      i2: Math.pow(1 + taxaProduto(p, mkt, true), 1 / 12) - 1,
+    }));
+    function aplicar(valor, mes) {
+      for (const e of st) {
+        if (valor <= 0) break;
+        const espaco = distribuir && e.prod.teto > 0 ? Math.max(0, e.prod.teto - e.saldo) : Infinity;
+        const v = Math.min(valor, espaco);
+        if (v > 0) { e.lotes.push({ principal: v, atual: v, mes }); e.saldo += v; valor -= v; }
+      }
+      if (valor > 0) { st[0].lotes.push({ principal: valor, atual: valor, mes }); st[0].saldo += valor; } // todos no teto
+    }
+    aplicar(inicial, 0);
+    let investido = inicial;
+    const evolucao = [{ mes: 0, saldo: inicial, investido }];
+    for (let m = 1; m <= meses; m++) {
+      for (const e of st) {
+        if (e.saldo <= 0) continue;
+        const base = e.prod.teto > 0 ? Math.min(e.saldo, e.prod.teto) : e.saldo;
+        const novo = base * (1 + e.i1) + (e.saldo - base) * (1 + e.i2);
+        const fator = novo / e.saldo;
+        e.lotes.forEach((l) => (l.atual *= fator));
+        e.saldo = novo;
+      }
+      aplicar(mensal, m);
+      investido += mensal;
+      evolucao.push({ mes: m, saldo: st.reduce((a, e) => a + e.saldo, 0), investido });
+    }
+    const porProduto = st.map((e) => {
+      const aportado = e.lotes.reduce((a, l) => a + l.principal, 0);
+      const ir = e.prod.isento ? 0 : e.lotes.reduce((a, l) => a + Math.max(0, l.atual - l.principal) * aliquotaIR(meses - l.mes), 0);
+      return { prod: e.prod, aportado, bruto: e.saldo, ir, liquido: e.saldo - ir };
+    });
+    const bruto = porProduto.reduce((a, p) => a + p.bruto, 0);
+    const ir = porProduto.reduce((a, p) => a + p.ir, 0);
+    const liquido = bruto - ir;
+    return {
+      porProduto, evolucao, investido, bruto, ir, liquido,
+      lucroLiquido: liquido - investido,
+      real: valorReal(liquido, inflacao, meses),
+      foraPorCarencia: produtos.filter((p) => (p.carencia || 0) > meses),
+    };
+  }
+
   // Juro real pela equação de Fisher: (1 + nominal) / (1 + inflação) - 1.
   function juroReal(nominal, inflacao) {
     return (1 + nominal) / (1 + inflacao) - 1;
@@ -128,17 +210,18 @@
   // Backtest com aporte inicial e mensal sobre retornos anuais (%).
   // O retorno de cada ano é distribuído em 12 meses com taxa composta equivalente.
   // inflacaoPct (opcional) devolve também os valores em reais do início do período.
-  function backtest({ retornosPct, inicial, mensal, inflacaoPct }) {
+  // custoPct: custo anual descontado do retorno de cada ano (taxa de ETF, custódia, spread).
+  function backtest({ retornosPct, inicial, mensal, inflacaoPct, custoPct = 0 }) {
     let saldo = inicial, investido = inicial, deflator = 1;
-    const pontos = [{ ano: 0, saldo, investido, real: saldo }];
+    const pontos = [{ ano: 0, saldo, investido, real: saldo, deflator }];
     retornosPct.forEach((r, a) => {
-      const i = Math.pow(1 + r / 100, 1 / 12) - 1;
+      const i = Math.pow((1 + r / 100) * (1 - custoPct / 100), 1 / 12) - 1;
       for (let m = 0; m < 12; m++) {
         saldo = saldo * (1 + i) + mensal;
         investido += mensal;
       }
       if (inflacaoPct) deflator *= 1 + inflacaoPct[a] / 100;
-      pontos.push({ ano: a + 1, saldo, investido, real: saldo / deflator });
+      pontos.push({ ano: a + 1, saldo, investido, real: saldo / deflator, deflator });
     });
     return pontos;
   }
@@ -191,18 +274,29 @@
     return ordenado[lo] + (ordenado[hi] - ordenado[lo]) * (idx - lo);
   }
 
-  // Simula a carteira mês a mês com retornos log-normais correlacionados e rebalanceamento mensal.
-  // premissas: { id: { ret: % anual mediano, vol: % anual } }
-  function monteCarlo({ alocacao, premissas, ids, correlacao, inicial, mensal, anos, inflacao = 0, sims = 2000, semente = 42 }) {
+  // Simula a carteira mês a mês em TERMOS REAIS (reais de hoje), com retornos log-normais correlacionados
+  // e rebalanceamento mensal. Os aportes mensais são corrigidos pela inflação.
+  // premissas: { id: { ret: % real anual mediano, vol: % anual, custo: % a.a., ir: alíquota % } }
+  // descontarIR: aplica o IR sobre o ganho NOMINAL no resgate (o imposto também incide sobre a inflação).
+  function monteCarlo({ alocacao, premissas, ids, correlacao, inicial, mensal, anos, inflacao = 0, descontarIR = false, sims = 2000, semente = 42 }) {
     const meses = Math.round(anos * 12);
     const n = ids.length;
     const pesos = ids.map((id) => (alocacao[id] || 0) / 100);
     const somaPesos = pesos.reduce((a, b) => a + b, 0) || 1;
     const w = pesos.map((p) => p / somaPesos);
-    const mu = ids.map((id) => Math.log(1 + premissas[id].ret / 100) / 12);
+    const mu = ids.map((id) => Math.log(1 + premissas[id].ret / 100) / 12 + Math.log(1 - (premissas[id].custo || 0) / 100) / 12);
     const sig = ids.map((id) => premissas[id].vol / 100 / Math.sqrt(12));
+    const aliquota = descontarIR ? ids.reduce((s, id, i) => s + w[i] * (premissas[id].ir || 0), 0) / 100 : 0;
     const L = cholesky(correlacao);
     const rand = gerador(semente);
+
+    // Inflação acumulada e total investido em valores nominais, mês a mês.
+    const inflM = Math.pow(1 + inflacao / 100, 1 / 12);
+    const defl = new Float64Array(meses + 1), invNom = new Float64Array(meses + 1);
+    defl[0] = 1; invNom[0] = inicial;
+    for (let m = 1; m <= meses; m++) { defl[m] = defl[m - 1] * inflM; invNom[m] = invNom[m - 1] + mensal * defl[m]; }
+    // Valor líquido (em reais de hoje) de um saldo real v no mês m, após o IR sobre o ganho nominal.
+    const liquido = (v, m) => v - (aliquota * Math.max(0, v * defl[m] - invNom[m])) / defl[m];
 
     const valores = new Float64Array((meses + 1) * sims); // [mes * sims + s]
     const quedas = new Float64Array(sims);
@@ -228,36 +322,36 @@
       quedas[s] = quedaMax;
     }
 
+    // O líquido é crescente no saldo, então o percentil do líquido = líquido do percentil.
     const faixas = [0.05, 0.25, 0.5, 0.75, 0.95];
     const serie = [];
     const buf = new Float64Array(sims);
     for (let m = 0; m <= meses; m++) {
       for (let s = 0; s < sims; s++) buf[s] = valores[m * sims + s];
       buf.sort();
-      const p = faixas.map((f) => percentil(buf, f));
-      serie.push({ mes: m, investido: inicial + mensal * m, p5: p[0], p25: p[1], p50: p[2], p75: p[3], p95: p[4] });
+      const p = faixas.map((f) => liquido(percentil(buf, f), m));
+      const bruto50 = percentil(buf, 0.5);
+      serie.push({ mes: m, investido: inicial + mensal * m, p5: p[0], p25: p[1], p50: p[2], p75: p[3], p95: p[4], bruto50 });
     }
 
-    const investido = inicial + mensal * meses;
-    const deflator = Math.pow(1 + inflacao / 100, anos);
-    let perdas = 0, perdasReais = 0;
-    for (let s = 0; s < sims; s++) {
-      const v = valores[meses * sims + s];
-      if (v < investido) perdas++;
-      if (v / deflator < investido) perdasReais++;
-    }
+    const investido = inicial + mensal * meses; // em reais de hoje
+    let perdas = 0;
+    for (let s = 0; s < sims; s++) if (liquido(valores[meses * sims + s], meses) < investido) perdas++;
     const quedasOrd = Array.from(quedas).sort((a, b) => a - b);
     const final = serie[meses];
     return {
       serie,
       investido,
+      investidoNominal: invNom[meses],
       final,
-      deflator,
-      probPerda: perdas / sims,
-      probPerdaReal: perdasReais / sims,
+      deflator: defl[meses],
+      aliquota,
+      irMediano: final.bruto50 - final.p50, // IR do cenário mediano, em reais de hoje
+      probPerda: perdas / sims, // chance de terminar abaixo do investido corrigido pela inflação
       quedaMediana: percentil(quedasOrd, 0.5),
-      quedaRuim: percentil(quedasOrd, 0.05), // 5% dos cenários tiveram queda pior que esta
+      quedaRuim: percentil(quedasOrd, 0.05),
       retornoEsperado: ids.reduce((s, id, i) => s + w[i] * premissas[id].ret, 0),
+      custoMedio: ids.reduce((s, id, i) => s + w[i] * (premissas[id].custo || 0), 0),
     };
   }
 
@@ -299,6 +393,7 @@
 
   const Calc = {
     taxaMensal, valorReal, aliquotaIR, taxaPoupanca, simular, produtos, reservaEmergencia, mesesParaMeta, juroReal,
+    taxaPctCDI, taxaProduto, equivalenteLiquido, simularPlano,
     estatisticas, retornosCarteira, backtest, gerador, cholesky, monteCarlo, perfilPorRespostas, rebalancear,
   };
 

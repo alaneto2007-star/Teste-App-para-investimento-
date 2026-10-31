@@ -27,11 +27,14 @@
           <label>Aporte mensal (R$)<input type="number" id="mensal" value="300" min="0" step="50" /></label>
           <label>Prazo (meses)<input type="number" id="meses" value="36" min="1" max="600" /></label>
 
-          <h2>Taxas (edite com os valores atuais)</h2>
+          <h2>Taxas</h2>
+          <p class="status" id="status-taxas">Buscando taxas no Banco Central…</p>
           <label>Selic (% a.a.)<input type="number" id="selic" value="15" min="0" step="0.05" /></label>
           <label>CDI (% a.a.)<input type="number" id="cdi" value="14.9" min="0" step="0.05" /></label>
           <label>CDB (% do CDI)<input type="number" id="pctCdb" value="100" min="0" step="1" /></label>
           <label>LCI/LCA (% do CDI)<input type="number" id="pctLci" value="90" min="0" step="1" /></label>
+          <label>Inflação – IPCA (% a.a.)<input type="number" id="ipca" value="4.5" min="0" step="0.1" /></label>
+          <button type="button" class="botao secundario" id="btn-taxas">Atualizar taxas do Banco Central</button>
         </form>
 
         <div class="cartao">
@@ -40,14 +43,14 @@
           <div class="tabela-wrap">
             <table class="tabela">
               <thead>
-                <tr><th>Produto</th><th>Bruto</th><th>IR</th><th>Líquido</th><th>Lucro</th></tr>
+                <tr><th>Produto</th><th>Bruto</th><th>IR</th><th>Líquido</th><th>Lucro</th><th title="Valor líquido descontada a inflação">Em reais de hoje</th></tr>
               </thead>
               <tbody id="tabela-res"></tbody>
             </table>
           </div>
           <div id="grafico" class="grafico" aria-label="Gráfico da evolução do saldo"></div>
           <div id="legenda" class="legenda"></div>
-          <p class="nota">IR regressivo: 22,5% (até 6 meses), 20% (até 1 ano), 17,5% (até 2 anos), 15% (acima). Poupança e LCI/LCA são isentas. Não considera taxas de custódia nem variação futura das taxas.</p>
+          <p class="nota">IR regressivo: 22,5% (até 6 meses), 20% (até 1 ano), 17,5% (até 2 anos), 15% (acima). Poupança e LCI/LCA são isentas. "Em reais de hoje" desconta a inflação informada: mostra o poder de compra real do valor final. Não considera taxas de custódia nem variação futura das taxas.</p>
         </div>
       </div>
     </section>

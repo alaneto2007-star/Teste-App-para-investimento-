@@ -22,9 +22,14 @@
     return 0.7 * selicAnual;
   }
 
+  // Valor futuro trazido para "reais de hoje", descontando a inflação anual.
+  function valorReal(valor, inflacaoAnual, meses) {
+    return valor / Math.pow(1 + inflacaoAnual, meses / 12);
+  }
+
   // Simula aportes mensais com juros compostos.
-  // Retorna a evolução mês a mês e o resultado final (bruto, IR, líquido).
-  function simular({ inicial, mensal, meses, taxaAnual, isento }) {
+  // Retorna a evolução mês a mês e o resultado final (bruto, IR, líquido e valor real).
+  function simular({ inicial, mensal, meses, taxaAnual, isento, inflacao = 0 }) {
     const i = taxaMensal(taxaAnual);
     let saldo = inicial;
     let investido = inicial;
@@ -36,6 +41,7 @@
     }
     const lucro = saldo - investido;
     const ir = isento || lucro <= 0 ? 0 : lucro * aliquotaIR(meses);
+    const real = valorReal(saldo - ir, inflacao, meses);
     return {
       evolucao,
       investido,
@@ -43,6 +49,7 @@
       ir,
       liquido: saldo - ir,
       lucroLiquido: lucro - ir,
+      real, // valor líquido em reais de hoje
     };
   }
 
@@ -75,7 +82,7 @@
     return m;
   }
 
-  const Calc = { taxaMensal, aliquotaIR, taxaPoupanca, simular, produtos, reservaEmergencia, mesesParaMeta };
+  const Calc = { taxaMensal, valorReal, aliquotaIR, taxaPoupanca, simular, produtos, reservaEmergencia, mesesParaMeta };
 
   if (typeof module !== "undefined" && module.exports) module.exports = Calc;
   else root.Calc = Calc;

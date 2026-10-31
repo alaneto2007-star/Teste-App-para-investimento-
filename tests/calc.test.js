@@ -24,6 +24,12 @@ perto(r.ir, 20);
 perto(r.liquido, 1080);
 assert.strictEqual(r.evolucao.length, 13);
 
+// Valor real: 1100 daqui a 1 ano com 10% de inflação = 1000 hoje
+perto(Calc.valorReal(1100, 0.1, 12), 1000);
+// Sem inflação informada, real = líquido
+perto(r.real, r.liquido);
+perto(Calc.simular({ inicial: 1000, mensal: 0, meses: 12, taxaAnual: 0.1, isento: true, inflacao: 0.1 }).real, 1000);
+
 // Isento não paga IR
 assert.strictEqual(Calc.simular({ inicial: 1000, mensal: 0, meses: 12, taxaAnual: 0.1, isento: true }).ir, 0);
 

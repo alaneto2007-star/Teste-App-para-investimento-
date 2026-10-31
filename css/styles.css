@@ -72,6 +72,11 @@ input:focus, select:focus { outline: 2px solid var(--destaque); outline-offset: 
   background: var(--destaque); color: #fff; border: none; border-radius: 6px;
 }
 
+.botao.secundario { background: none; color: var(--destaque); border: 1px solid var(--destaque); font-weight: 500; }
+.status { font-size: 0.8rem; color: var(--suave); margin: -6px 0 10px; }
+.status.ok { color: var(--destaque); }
+.perda { color: #c2410c; }
+
 .investido { margin: 0 0 12px; color: var(--suave); }
 .investido strong { color: var(--texto); }
 

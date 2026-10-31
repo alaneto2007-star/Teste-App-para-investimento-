@@ -31,7 +31,7 @@ document.querySelectorAll(".aba").forEach((botao) => {
 // ---------- Simulador ----------
 function atualizarSimulador() {
   const meses = Math.max(1, Math.min(600, Math.round(num("meses"))));
-  const base = { inicial: num("inicial"), mensal: num("mensal"), meses };
+  const base = { inicial: num("inicial"), mensal: num("mensal"), meses, inflacao: num("ipca") / 100 };
   const lista = Calc.produtos({
     selic: num("selic") / 100,
     cdi: num("cdi") / 100,
@@ -51,6 +51,7 @@ function atualizarSimulador() {
         <td>${brl.format(p.r.ir)}</td>
         <td>${brl.format(p.r.liquido)}</td>
         <td>${brl.format(p.r.lucroLiquido)}</td>
+        <td class="${p.r.real < p.r.investido ? "perda" : ""}">${brl.format(p.r.real)}</td>
       </tr>`
     )
     .join("");
@@ -92,6 +93,44 @@ function desenharGrafico(resultados, meses) {
 }
 
 $("form-sim").addEventListener("input", atualizarSimulador);
+
+// ---------- Taxas do Banco Central (API SGS) ----------
+// 432 = Selic meta (% a.a.), 4389 = CDI anualizado (% a.a.), 13522 = IPCA acumulado 12 meses (%)
+const SERIES = { selic: 432, cdi: 4389, ipca: 13522 };
+
+async function buscarSerie(codigo) {
+  const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${codigo}/dados/ultimos/1?formato=json`;
+  const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+  if (!resp.ok) throw new Error("HTTP " + resp.status);
+  const [ultimo] = await resp.json();
+  const valor = parseFloat(String(ultimo.valor).replace(",", "."));
+  if (!Number.isFinite(valor)) throw new Error("valor inválido");
+  return { valor, data: ultimo.data };
+}
+
+async function atualizarTaxas() {
+  const status = $("status-taxas");
+  status.className = "status";
+  status.textContent = "Buscando taxas no Banco Central…";
+  const resultados = await Promise.allSettled(Object.values(SERIES).map(buscarSerie));
+  const ok = [];
+  Object.keys(SERIES).forEach((campo, i) => {
+    const r = resultados[i];
+    if (r.status === "fulfilled") {
+      $(campo).value = r.value.valor.toFixed(2);
+      ok.push(r.value.data);
+    }
+  });
+  if (ok.length === 0) {
+    status.textContent = "Não foi possível buscar as taxas agora. Usando os valores digitados.";
+  } else {
+    status.className = "status ok";
+    status.textContent =
+      `Taxas do Banco Central de ${ok[0]}` + (ok.length < 3 ? " (algumas não carregaram; confira os campos)" : "") + ".";
+  }
+  atualizarSimulador();
+}
+$("btn-taxas").addEventListener("click", atualizarTaxas);
 $("form-sim").addEventListener("submit", (e) => e.preventDefault());
 
 // ---------- Reserva e metas ----------
@@ -177,6 +216,7 @@ $("form-ativo").addEventListener("submit", (e) => {
   carteira.push({ nome, cat: $("ativo-cat").value, valor });
   salvarCarteira();
   atualizarCarteira();
+atualizarTaxas();
   e.target.reset();
   $("ativo-nome").focus();
 });
@@ -187,6 +227,7 @@ $("lista-ativos").addEventListener("click", (e) => {
   carteira.splice(Number(i), 1);
   salvarCarteira();
   atualizarCarteira();
+atualizarTaxas();
 });
 
 // ---------- Inicialização ----------
@@ -194,3 +235,4 @@ atualizarSimulador();
 atualizarReserva();
 atualizarMeta();
 atualizarCarteira();
+atualizarTaxas();

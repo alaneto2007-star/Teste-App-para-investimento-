@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Invest Simulador</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topo">
+    <h1>Invest Simulador</h1>
+    <p class="sub">Simule, organize e planeje seus investimentos. Projeto de estudo, não é recomendação de investimento.</p>
+    <nav class="abas" role="tablist">
+      <button class="aba ativa" data-aba="simulador" role="tab">Simulador</button>
+      <button class="aba" data-aba="metas" role="tab">Reserva &amp; Metas</button>
+      <button class="aba" data-aba="carteira" role="tab">Minha carteira</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- SIMULADOR -->
+    <section id="simulador" class="painel ativo">
+      <div class="grade">
+        <form id="form-sim" class="cartao">
+          <h2>Seu investimento</h2>
+          <label>Valor inicial (R$)<input type="number" id="inicial" value="1000" min="0" step="100" /></label>
+          <label>Aporte mensal (R$)<input type="number" id="mensal" value="300" min="0" step="50" /></label>
+          <label>Prazo (meses)<input type="number" id="meses" value="36" min="1" max="600" /></label>
+
+          <h2>Taxas (edite com os valores atuais)</h2>
+          <label>Selic (% a.a.)<input type="number" id="selic" value="15" min="0" step="0.05" /></label>
+          <label>CDI (% a.a.)<input type="number" id="cdi" value="14.9" min="0" step="0.05" /></label>
+          <label>CDB (% do CDI)<input type="number" id="pctCdb" value="100" min="0" step="1" /></label>
+          <label>LCI/LCA (% do CDI)<input type="number" id="pctLci" value="90" min="0" step="1" /></label>
+        </form>
+
+        <div class="cartao">
+          <h2>Resultado após <span id="prazo-txt"></span></h2>
+          <p class="investido">Total investido: <strong id="total-investido"></strong></p>
+          <div class="tabela-wrap">
+            <table class="tabela">
+              <thead>
+                <tr><th>Produto</th><th>Bruto</th><th>IR</th><th>Líquido</th><th>Lucro</th></tr>
+              </thead>
+              <tbody id="tabela-res"></tbody>
+            </table>
+          </div>
+          <div id="grafico" class="grafico" aria-label="Gráfico da evolução do saldo"></div>
+          <div id="legenda" class="legenda"></div>
+          <p class="nota">IR regressivo: 22,5% (até 6 meses), 20% (até 1 ano), 17,5% (até 2 anos), 15% (acima). Poupança e LCI/LCA são isentas. Não considera taxas de custódia nem variação futura das taxas.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- RESERVA E METAS -->
+    <section id="metas" class="painel">
+      <div class="grade">
+        <form id="form-reserva" class="cartao">
+          <h2>Reserva de emergência</h2>
+          <label>Gastos mensais (R$)<input type="number" id="gastos" value="3000" min="0" step="100" /></label>
+          <label>Situação de trabalho
+            <select id="perfil">
+              <option value="clt">CLT (6 meses)</option>
+              <option value="publico">Servidor público (3 meses)</option>
+              <option value="autonomo">Autônomo / empresário (12 meses)</option>
+            </select>
+          </label>
+          <div class="destaque" id="res-reserva"></div>
+          <p class="nota">Deixe a reserva em algo seguro e com liquidez diária, como Tesouro Selic ou CDB com 100% do CDI.</p>
+        </form>
+
+        <form id="form-meta" class="cartao">
+          <h2>Quanto tempo até a meta?</h2>
+          <label>Meta (R$)<input type="number" id="alvo" value="50000" min="0" step="1000" /></label>
+          <label>Já tenho (R$)<input type="number" id="meta-inicial" value="2000" min="0" step="100" /></label>
+          <label>Aporte mensal (R$)<input type="number" id="meta-mensal" value="800" min="0" step="50" /></label>
+          <label>Rentabilidade (% a.a.)<input type="number" id="meta-taxa" value="12" min="0" step="0.5" /></label>
+          <div class="destaque" id="res-meta"></div>
+        </form>
+      </div>
+    </section>
+
+    <!-- CARTEIRA -->
+    <section id="carteira" class="painel">
+      <div class="grade">
+        <form id="form-ativo" class="cartao">
+          <h2>Adicionar investimento</h2>
+          <label>Nome<input type="text" id="ativo-nome" placeholder="Ex.: Tesouro Selic 2029" required /></label>
+          <label>Categoria
+            <select id="ativo-cat">
+              <option>Renda fixa</option>
+              <option>Ações</option>
+              <option>FIIs</option>
+              <option>ETFs</option>
+              <option>Exterior</option>
+              <option>Cripto</option>
+              <option>Outros</option>
+            </select>
+          </label>
+          <label>Valor atual (R$)<input type="number" id="ativo-valor" min="0" step="0.01" required /></label>
+          <button type="submit" class="botao">Adicionar</button>
+          <p class="nota">Os dados ficam salvos só neste navegador.</p>
+        </form>
+
+        <div class="cartao">
+          <h2>Distribuição — <span id="total-carteira"></span></h2>
+          <div id="barras" class="barras"></div>
+          <ul id="lista-ativos" class="lista"></ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/calc.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

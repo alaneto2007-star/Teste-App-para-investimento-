@@ -1,0 +1,111 @@
+:root {
+  --fundo: #f5f7fa;
+  --cartao: #ffffff;
+  --texto: #1d2433;
+  --suave: #5f6b7e;
+  --borda: #dde3eb;
+  --destaque: #0f7b5f;
+  --destaque-fundo: #e5f4ef;
+  --c1: #8a94a6; /* poupança */
+  --c2: #2563eb; /* selic */
+  --c3: #d97706; /* cdb */
+  --c4: #0f7b5f; /* lci */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fundo: #12161e;
+    --cartao: #1b212c;
+    --texto: #e6e9ef;
+    --suave: #9aa4b5;
+    --borda: #2c3443;
+    --destaque: #34c39a;
+    --destaque-fundo: #173229;
+    --c1: #9aa4b5;
+    --c2: #60a5fa;
+    --c3: #fbbf24;
+    --c4: #34c39a;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--fundo);
+  color: var(--texto);
+  line-height: 1.5;
+}
+
+.topo { padding: 24px 16px 0; max-width: 1100px; margin: 0 auto; }
+.topo h1 { margin: 0; font-size: 1.6rem; }
+.sub { margin: 4px 0 16px; color: var(--suave); }
+
+.abas { display: flex; gap: 4px; border-bottom: 1px solid var(--borda); overflow-x: auto; }
+.aba {
+  background: none; border: none; padding: 10px 14px; cursor: pointer;
+  font: inherit; color: var(--suave); border-bottom: 2px solid transparent; white-space: nowrap;
+}
+.aba.ativa { color: var(--texto); border-bottom-color: var(--destaque); font-weight: 600; }
+
+main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+.painel { display: none; }
+.painel.ativo { display: block; }
+
+.grade { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
+@media (max-width: 800px) { .grade { grid-template-columns: 1fr; } }
+
+.cartao { background: var(--cartao); border: 1px solid var(--borda); border-radius: 10px; padding: 16px; min-width: 0; }
+.cartao h2 { font-size: 1rem; margin: 0 0 12px; }
+.cartao h2 + label, form h2:not(:first-child) { margin-top: 16px; }
+
+label { display: block; font-size: 0.9rem; color: var(--suave); margin-bottom: 10px; }
+input, select {
+  display: block; width: 100%; margin-top: 4px; padding: 8px 10px; font: inherit;
+  color: var(--texto); background: var(--fundo); border: 1px solid var(--borda); border-radius: 6px;
+}
+input:focus, select:focus { outline: 2px solid var(--destaque); outline-offset: 0; }
+
+.botao {
+  width: 100%; padding: 10px; font: inherit; font-weight: 600; cursor: pointer;
+  background: var(--destaque); color: #fff; border: none; border-radius: 6px;
+}
+
+.investido { margin: 0 0 12px; color: var(--suave); }
+.investido strong { color: var(--texto); }
+
+.tabela-wrap { overflow-x: auto; }
+.tabela { width: 100%; border-collapse: collapse; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.tabela th, .tabela td { padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--borda); white-space: nowrap; }
+.tabela th:first-child, .tabela td:first-child { text-align: left; }
+.tabela th { color: var(--suave); font-weight: 500; }
+.tabela tr.melhor td { font-weight: 600; }
+.ponto { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+
+.grafico { margin-top: 16px; width: 100%; }
+.grafico svg { width: 100%; height: auto; display: block; }
+.grafico .eixo { stroke: var(--borda); }
+.grafico text { fill: var(--suave); font-size: 11px; }
+.legenda { display: flex; flex-wrap: wrap; gap: 12px; font-size: 0.85rem; color: var(--suave); margin-top: 6px; }
+
+.nota { font-size: 0.8rem; color: var(--suave); margin: 12px 0 0; }
+
+.destaque {
+  background: var(--destaque-fundo); border-radius: 8px; padding: 12px; margin-top: 8px;
+}
+.destaque .grande { font-size: 1.5rem; font-weight: 700; color: var(--destaque); display: block; }
+
+.barras { display: flex; height: 18px; border-radius: 9px; overflow: hidden; background: var(--fundo); margin-bottom: 12px; }
+.barras div { height: 100%; }
+.lista { list-style: none; padding: 0; margin: 0; }
+.lista li {
+  display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--borda); font-size: 0.9rem;
+}
+.lista .nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lista .cat { color: var(--suave); font-size: 0.8rem; }
+.lista .valor { font-variant-numeric: tabular-nums; }
+.lista button {
+  background: none; border: none; color: var(--suave); cursor: pointer; font-size: 1rem; padding: 2px 6px;
+}
+.vazio { color: var(--suave); font-size: 0.9rem; }

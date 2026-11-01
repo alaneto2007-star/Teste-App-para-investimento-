@@ -173,4 +173,70 @@ assert.ok(com.probPerda > 0.9);
 const custo = Calc.monteCarlo({ alocacao: { cdi: 100 }, premissas: { ...pr, cdi: { ret: 0, vol: 0.001, custo: 1, ir: 0 } }, ids, correlacao: Dados.CORRELACAO, inicial: 1000, mensal: 0, anos: 1, sims: 200 });
 perto(custo.final.p50, 990, 0.5);
 
+// ---------- Apps e corretoras: novos tipos, custódia, custos e FGC ----------
+const mk2 = { cdi: 0.149, selic: 0.15, ipca: 0.045 };
+const pre = { tipo: "prefixado", pct: 12 };
+const ipcaMais = { tipo: "ipca", pct: 7 };
+perto(Calc.taxaProduto(pre, mk2), 0.12, 1e-12);
+perto(Calc.taxaProduto(ipcaMais, mk2), 1.045 * 1.07 - 1, 1e-12); // 11,815%
+perto(Calc.taxaProduto({ ...pre, custodia: 0.2 }, mk2), 1.12 * 0.998 - 1, 1e-12);
+assert.ok(Calc.taxaProduto({ ...cdb100, custodia: 0.2 }, mk2) < Calc.taxaProduto(cdb100, mk2));
+// Sem IPCA informado, IPCA+ rende só o juro real
+perto(Calc.taxaProduto(ipcaMais, { cdi: 0.149, selic: 0.15 }), 0.07, 1e-12);
+// Equivalência de um IPCA+ isento de IR = taxa / CDI (em base diária)
+const eqIpca = Calc.equivalenteLiquido({ ...ipcaMais, isento: true }, 24, mk2);
+const dd = (x) => Math.pow(1 + x, 1 / 252) - 1;
+perto(eqIpca, (dd(1.045 * 1.07 - 1) / dd(0.149)) * 100, 1e-9);
+// Plano com IPCA+ usa o IPCA informado
+const planoIpca = Calc.simularPlano({ produtos: [{ ...ipcaMais, id: "x", nome: "IPCA+", isento: true, teto: 0, carencia: 0 }], inicial: 1000, mensal: 0, meses: 12, ...mk2 });
+perto(planoIpca.bruto, 1000 * 1.045 * 1.07, 0.01);
+// Liquidez diária
+assert.strictEqual(Calc.temLiquidezDiaria(cdb100), true);
+assert.strictEqual(Calc.temLiquidezDiaria(lci), false);
+assert.strictEqual(Calc.temLiquidezDiaria(pre), false);
+assert.strictEqual(Calc.temLiquidezDiaria(selic), true);
+
+// Custos: 2 compras de R$ 1.000 por mês, sem corretagem => só B3 (0,03% de R$ 24 mil = R$ 7,20 por ano)
+const ca = Calc.custoAcoes({ valorOrdem: 1000, ordensMes: 2 });
+perto(ca.total, 7.2, 1e-9);
+perto(ca.pctAportes, 0.03, 1e-9);
+// Corretagem de R$ 5 por ordem e custódia de 0,1% sobre R$ 10 mil
+perto(Calc.custoAcoes({ valorOrdem: 1000, ordensMes: 2, saldo: 10000, corretagem: 5, custodiaPct: 0.1 }).total, 7.2 + 120 + 10, 1e-9);
+// Cripto: 1% na compra e 1% na venda => R$ 19,90 em R$ 1.000
+perto(Calc.custoCripto({ valor: 1000, taxaPct: 1 }).custo, 19.9, 1e-9);
+// Exterior: IOF 1,1% e spread 1% sobre R$ 1.000 => chega R$ 979,11; com dólar a R$ 5, US$ 195,82
+const ex = Calc.custoExterior({ valor: 1000, spreadPct: 1, iofPct: 1.1, dolar: 5 });
+perto(ex.chega, 1000 * 0.989 * 0.99, 1e-9);
+perto(ex.emDolar, (1000 * 0.989 * 0.99) / 5, 1e-9);
+
+// FGC: R$ 150 mil + R$ 150 mil no mesmo emissor passam do limite; Tesouro não conta
+const fgc = Calc.concentracaoFGC([
+  { prod: { id: "a", nome: "CDB A", emissor: "Banco X" }, bruto: 150000 },
+  { prod: { id: "b", nome: "LCI A", emissor: "banco x" }, bruto: 150000 },
+  { prod: { id: "c", nome: "CDB B", emissor: "" }, bruto: 200000 },
+  { prod: { id: "d", nome: "Tesouro", emissor: "Tesouro Nacional" }, bruto: 900000 },
+]);
+assert.strictEqual(fgc.length, 2);
+assert.strictEqual(fgc[0].valor, 300000);
+assert.strictEqual(fgc[0].excede, true);
+assert.strictEqual(fgc[1].excede, false);
+
+// Título com vencimento: prefixado de 12% que vence em 12 meses, num prazo de 24 meses com CDI de 10%
+// => 12% no 1º ano e o CDI no 2º; aportes depois do vencimento vão para o próximo produto.
+const mk3 = { cdi: 0.10, selic: 0.10, ipca: 0.04 };
+const preVence = { id: "pv", nome: "Prefixado 12 meses", tipo: "prefixado", pct: 12, isento: false, teto: 0, pctAcima: 100, carencia: 12, vencimento: "01/01/2028" };
+const cdbRef = { id: "cr", nome: "CDB", tipo: "cdi", pct: 100, isento: false, teto: 0, pctAcima: 100, carencia: 0 };
+const venc = Calc.simularPlano({ produtos: [preVence], inicial: 1000, mensal: 0, meses: 24, ...mk3, distribuir: false });
+perto(venc.bruto, 1000 * 1.12 * 1.10, 0.01);
+perto(Calc.equivalenteLiquido(preVence, 24, mk3), Calc.equivalenteLiquido({ ...preVence, vencimento: undefined, carencia: 0, tipo: "cdi", pct: 100 }, 24, { ...mk3, cdi: Math.sqrt(1.12 * 1.10) - 1 }) * (Math.pow(Math.sqrt(1.12 * 1.10), 1 / 252) - 1) / (Math.pow(1.10, 1 / 252) - 1), 1e-6);
+const vencPlano = Calc.simularPlano({ produtos: [preVence, cdbRef], inicial: 1000, mensal: 100, meses: 24, ...mk3 });
+perto(vencPlano.porProduto.find((x) => x.prod.id === "pv").aportado, 1000 + 100 * 11, 1e-9); // aportes até o mês 11
+perto(vencPlano.porProduto.find((x) => x.prod.id === "cr").aportado, 100 * 13, 1e-9); // do mês 12 em diante
+
+// Dados das plataformas: ids únicos e ofertas conhecidas
+const idsPlat = Dados.PLATAFORMAS.map((p) => p.id);
+assert.strictEqual(new Set(idsPlat).size, idsPlat.length);
+for (const p of Dados.PLATAFORMAS) for (const o of p.oferece) assert.ok(Dados.OFERTAS[o], p.id + ": " + o);
+for (const p of Dados.PRODUTOS_RF) assert.ok(!p.plataforma || idsPlat.includes(p.plataforma), p.id);
+
 console.log("Todos os testes passaram.");

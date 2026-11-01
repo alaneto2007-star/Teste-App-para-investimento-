@@ -91,17 +91,34 @@
     return Math.pow(1 + (diaria * pct) / 100, 252) - 1;
   }
 
-  // Taxa anual bruta de um produto de renda fixa. acima = true usa a taxa do saldo que passa do teto.
-  function taxaProduto(prod, { cdi, selic }, acima = false) {
-    if (prod.tipo === "poupanca") return taxaPoupanca(selic);
-    if (acima) return taxaPctCDI(cdi, prod.pctAcima ?? 100);
-    return taxaPctCDI(prod.tipo === "selic" ? selic : cdi, prod.pct);
+  // Taxa anual bruta de um produto de renda fixa, já descontada a custódia (% a.a.), se houver.
+  // Tipos: "cdi" e "selic" (pct = % do índice), "poupanca", "prefixado" (pct = % ao ano) e
+  // "ipca" (pct = juro real; rende (1 + IPCA) × (1 + pct) − 1, com o IPCA de mkt.ipca constante).
+  // acima = true usa a taxa do saldo que passa do teto (pctAcima, sempre em % do CDI).
+  function taxaProduto(prod, { cdi, selic, ipca = 0 }, acima = false) {
+    let r;
+    if (prod.tipo === "poupanca") r = taxaPoupanca(selic);
+    else if (acima) r = taxaPctCDI(cdi, prod.pctAcima ?? 100);
+    else if (prod.tipo === "prefixado") r = prod.pct / 100;
+    else if (prod.tipo === "ipca") r = (1 + ipca) * (1 + prod.pct / 100) - 1;
+    else r = taxaPctCDI(prod.tipo === "selic" ? selic : cdi, prod.pct);
+    return prod.custodia ? (1 + r) * (1 - prod.custodia / 100) - 1 : r;
   }
+
+  // Dá para resgatar a qualquer dia sem perder a taxa? Carência, prefixados e IPCA+ (marcação a mercado) não.
+  function temLiquidezDiaria(prod) {
+    return !(prod.carencia > 0) && prod.tipo !== "prefixado" && prod.tipo !== "ipca";
+  }
+
+  // Título com vencimento (ex.: Tesouro Prefixado): a taxa vale até o vencimento (guardado em "carencia").
+  // Depois dele, o dinheiro é reaplicado a 100% do CDI.
+  const venceuEm = (prod) => (prod.vencimento ? prod.carencia || 0 : Infinity);
 
   // Rendimento líquido de IR, expresso em % do CDI, para um prazo em meses (ignora o teto).
   function equivalenteLiquido(prod, meses, mkt) {
     const r = taxaProduto(prod, mkt);
-    const ganho = Math.pow(1 + r, meses / 12) - 1;
+    const ateVencer = Math.min(meses, venceuEm(prod));
+    const ganho = Math.pow(1 + r, ateVencer / 12) * Math.pow(1 + mkt.cdi, (meses - ateVencer) / 12) - 1;
     const aliq = prod.isento ? 0 : aliquotaIR(meses);
     const liquidoAnual = Math.pow(1 + ganho * (1 - aliq), 12 / meses) - 1;
     const d = (x) => Math.pow(1 + x, 1 / 252) - 1;
@@ -113,21 +130,23 @@
   // (o que não cabe vai para o próximo). Produtos com carência maior que o prazo ficam de fora.
   // distribuir = false: todo o dinheiro vai para o primeiro produto; o saldo acima do teto rende pctAcima.
   // O IR é calculado por aporte, conforme o tempo que cada um ficou aplicado (tabela regressiva).
-  function simularPlano({ produtos, inicial, mensal, meses, cdi, selic, inflacao = 0, distribuir = true }) {
-    const mkt = { cdi, selic };
+  function simularPlano({ produtos, inicial, mensal, meses, cdi, selic, ipca = 0, inflacao = 0, distribuir = true }) {
+    const mkt = { cdi, selic, ipca };
     const validos = produtos.filter((p) => (p.carencia || 0) <= meses);
     const ordem = distribuir
       ? [...validos].sort((a, b) => equivalenteLiquido(b, meses, mkt) - equivalenteLiquido(a, meses, mkt))
       : validos.slice(0, 1);
     if (!ordem.length) return null;
+    const iCDI = Math.pow(1 + cdi, 1 / 12) - 1;
     const st = ordem.map((p) => ({
-      prod: p, saldo: 0, lotes: [],
+      prod: p, saldo: 0, lotes: [], vence: venceuEm(p),
       i1: Math.pow(1 + taxaProduto(p, mkt), 1 / 12) - 1,
       i2: Math.pow(1 + taxaProduto(p, mkt, true), 1 / 12) - 1,
     }));
     function aplicar(valor, mes) {
       for (const e of st) {
         if (valor <= 0) break;
+        if (distribuir && mes >= e.vence) continue; // título vencido não recebe aporte novo
         const espaco = distribuir && e.prod.teto > 0 ? Math.max(0, e.prod.teto - e.saldo) : Infinity;
         const v = Math.min(valor, espaco);
         if (v > 0) { e.lotes.push({ principal: v, atual: v, mes }); e.saldo += v; valor -= v; }
@@ -141,7 +160,7 @@
       for (const e of st) {
         if (e.saldo <= 0) continue;
         const base = e.prod.teto > 0 ? Math.min(e.saldo, e.prod.teto) : e.saldo;
-        const novo = base * (1 + e.i1) + (e.saldo - base) * (1 + e.i2);
+        const novo = m > e.vence ? e.saldo * (1 + iCDI) : base * (1 + e.i1) + (e.saldo - base) * (1 + e.i2);
         const fator = novo / e.saldo;
         e.lotes.forEach((l) => (l.atual *= fator));
         e.saldo = novo;
@@ -164,6 +183,47 @@
       real: valorReal(liquido, inflacao, meses),
       foraPorCarencia: produtos.filter((p) => (p.carencia || 0) > meses),
     };
+  }
+
+  // Soma o saldo por emissor e marca quem passa do limite do FGC (R$ 250 mil por CPF e instituição).
+  // Títulos do Tesouro ficam de fora (garantia do governo). Sem emissor informado, cada produto conta sozinho.
+  function concentracaoFGC(porProduto, limite = 250000, emissorTesouro = "Tesouro Nacional") {
+    const grupos = new Map();
+    porProduto.forEach((x) => {
+      const emissor = (x.prod.emissor || "").trim();
+      if (emissor === emissorTesouro) return;
+      const chave = emissor ? emissor.toLowerCase() : "produto:" + (x.prod.id || x.prod.nome);
+      const g = grupos.get(chave) || { emissor: emissor || x.prod.nome, valor: 0, produtos: [] };
+      g.valor += x.bruto;
+      g.produtos.push(x.prod.nome);
+      grupos.set(chave, g);
+    });
+    return [...grupos.values()].map((g) => ({ ...g, excede: g.valor > limite })).sort((a, b) => b.valor - a.valor);
+  }
+
+  // ---------- Custos de plataformas ----------
+
+  // Custo anual de comprar ações, ETFs ou FIIs: corretagem por ordem + taxas da B3 (% do volume) + custódia.
+  function custoAcoes({ valorOrdem, ordensMes, saldo = 0, corretagem = 0, custodiaPct = 0, taxaB3Pct = 0.03 }) {
+    const ordensAno = ordensMes * 12;
+    const volumeAno = valorOrdem * ordensAno;
+    const b3 = (volumeAno * taxaB3Pct) / 100;
+    const corr = corretagem * ordensAno;
+    const cust = (saldo * custodiaPct) / 100;
+    const total = b3 + corr + cust;
+    return { b3, corretagem: corr, custodia: cust, total, pctAportes: volumeAno ? (total / volumeAno) * 100 : 0 };
+  }
+
+  // Custo de comprar e depois vender cripto, com taxa (ou spread) de t% em cada operação.
+  function custoCripto({ valor, taxaPct }) {
+    const volta = valor * Math.pow(1 - taxaPct / 100, 2);
+    return { custo: valor - volta, volta, pct: valor ? ((valor - volta) / valor) * 100 : 0 };
+  }
+
+  // Envio de reais para uma conta de investimento no exterior: IOF e spread de câmbio saem do valor.
+  function custoExterior({ valor, spreadPct, iofPct, dolar }) {
+    const chega = valor * (1 - iofPct / 100) * (1 - spreadPct / 100);
+    return { chega, custo: valor - chega, emDolar: dolar ? chega / dolar : null, pct: valor ? ((valor - chega) / valor) * 100 : 0 };
   }
 
   // Juro real pela equação de Fisher: (1 + nominal) / (1 + inflação) - 1.
@@ -393,7 +453,8 @@
 
   const Calc = {
     taxaMensal, valorReal, aliquotaIR, taxaPoupanca, simular, produtos, reservaEmergencia, mesesParaMeta, juroReal,
-    taxaPctCDI, taxaProduto, equivalenteLiquido, simularPlano,
+    taxaPctCDI, taxaProduto, temLiquidezDiaria, equivalenteLiquido, simularPlano, concentracaoFGC,
+    custoAcoes, custoCripto, custoExterior,
     estatisticas, retornosCarteira, backtest, gerador, cholesky, monteCarlo, perfilPorRespostas, rebalancear,
   };
 

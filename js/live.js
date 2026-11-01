@@ -55,5 +55,16 @@
       .sort((a, b) => (b.capitalizacao || 0) - (a.capitalizacao || 0));
   }
 
-  root.Live = { bancoCentral, cripto };
+  // Taxas do Tesouro Direto gravadas pelo robô do GitHub (data/tesouro.json, publicado junto com o site).
+  // Fora do GitHub Pages (arquivo aberto no computador, link do Claude) o arquivo não existe: devolve null.
+  async function tesouro() {
+    try {
+      const d = await json("data/tesouro.json", 6000);
+      return d && Array.isArray(d.titulos) && d.titulos.length ? d : null;
+    } catch {
+      return null;
+    }
+  }
+
+  root.Live = { bancoCentral, cripto, tesouro };
 })(window);

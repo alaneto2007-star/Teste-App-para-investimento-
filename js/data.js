@@ -91,15 +91,113 @@
     eth: { ret: 10, vol: 85, custo: 0.8, ir: 15 },
   };
 
-  // Produtos de renda fixa padrão para o simulador. tipo: "cdi" (% do CDI), "selic" (% da Selic) ou "poupanca".
+  // Produtos de renda fixa padrão para o simulador.
+  // tipo: "cdi" (% do CDI), "selic" (% da Selic), "poupanca", "prefixado" (% ao ano) ou "ipca" (IPCA + % ao ano).
   // teto: saldo máximo que rende a taxa principal (0 = sem teto); pctAcima: % do CDI sobre o que passar do teto;
-  // carencia: meses mínimos antes do resgate.
+  // carencia: meses mínimos antes do resgate (nos títulos do Tesouro, meses até o vencimento);
+  // plataforma: id em PLATAFORMAS ("" = qualquer banco ou corretora); emissor: quem deve o dinheiro (para o FGC);
+  // custodia: custo anual em % (ex.: 0,20% da B3 nos títulos do Tesouro).
   const PRODUTOS_RF = [
-    { id: "poupanca", nome: "Poupança", tipo: "poupanca", pct: 100, isento: true, teto: 0, pctAcima: 100, carencia: 0, liquidez: "Diária" },
-    { id: "selic", nome: "Tesouro Selic", tipo: "selic", pct: 100, isento: false, teto: 0, pctAcima: 100, carencia: 0, liquidez: "D+1" },
-    { id: "cdb100", nome: "CDB liquidez diária", tipo: "cdi", pct: 100, isento: false, teto: 0, pctAcima: 100, carencia: 0, liquidez: "Diária" },
-    { id: "turbo", nome: "Caixinha Nubank 115% (até R$ 5 mil)", tipo: "cdi", pct: 115, isento: false, teto: 5000, pctAcima: 100, carencia: 0, liquidez: "Diária" },
-    { id: "lci", nome: "LCI/LCA", tipo: "cdi", pct: 90, isento: true, teto: 0, pctAcima: 90, carencia: 12, liquidez: "No vencimento" },
+    { id: "poupanca", nome: "Poupança", tipo: "poupanca", pct: 100, isento: true, teto: 0, pctAcima: 100, carencia: 0, plataforma: "", emissor: "", custodia: 0 },
+    { id: "selic", nome: "Tesouro Selic", tipo: "selic", pct: 100, isento: false, teto: 0, pctAcima: 100, carencia: 0, plataforma: "", emissor: "Tesouro Nacional", custodia: 0 },
+    { id: "cdb100", nome: "CDB liquidez diária", tipo: "cdi", pct: 100, isento: false, teto: 0, pctAcima: 100, carencia: 0, plataforma: "", emissor: "", custodia: 0 },
+    { id: "turbo", nome: "Caixinha Nubank 115% (até R$ 5 mil)", tipo: "cdi", pct: 115, isento: false, teto: 5000, pctAcima: 100, carencia: 0, plataforma: "nubank", emissor: "Nu Financeira", custodia: 0 },
+    { id: "lci", nome: "LCI/LCA", tipo: "cdi", pct: 90, isento: true, teto: 0, pctAcima: 90, carencia: 12, plataforma: "", emissor: "", custodia: 0 },
+  ];
+
+  const TESOURO_EMISSOR = "Tesouro Nacional"; // títulos públicos: garantia do governo, fora do FGC
+  const FGC_LIMITE = 250000; // por CPF, por instituição (conglomerado)
+  const IOF_CAMBIO = 1.1; // remessa para conta própria de investimento no exterior; confira a regra vigente
+  const TAXA_B3 = 0.03; // emolumentos e liquidação da B3 por operação em ações, ETFs e FIIs (aprox.)
+
+  // O que cada app oferece. Chaves usadas em PLATAFORMAS[].oferece.
+  const OFERTAS = {
+    reserva: "Caixinha ou conta que rende",
+    cdb: "CDB",
+    lci: "LCI/LCA",
+    tesouro: "Tesouro Direto",
+    acoes: "Ações",
+    etfs: "ETFs",
+    fiis: "FIIs",
+    bdrs: "BDRs",
+    fundos: "Fundos",
+    cripto: "Cripto",
+    exterior: "Conta no exterior",
+  };
+
+  // Apps, bancos e corretoras. Custos de REFERÊNCIA (2025), da memória de quem montou o app:
+  // mudam com frequência e devem ser conferidos no app. Todos são editáveis na tela.
+  // corretagem: R$ por ordem de ações/ETFs/FIIs; custodia: % a.a. sobre ações; cripto: custo % por operação
+  // (taxa ou spread); cambio: spread % na conversão para dólar. null = não oferece ou sem referência.
+  const PLATAFORMAS = [
+    { id: "nubank", nome: "Nubank", tipo: "banco", oferece: ["reserva", "cdb", "tesouro", "acoes", "etfs", "fiis", "bdrs", "fundos", "cripto"],
+      custos: { corretagem: 0, custodia: 0, cripto: 2, cambio: null },
+      destaque: "Caixinhas com liquidez diária e investimentos (pela NuInvest) no mesmo app da conta.",
+      cuidado: "Cripto comprada no app tem o custo embutido no preço, em geral maior que o de uma exchange." },
+    { id: "inter", nome: "Inter", tipo: "banco", oferece: ["reserva", "cdb", "lci", "tesouro", "acoes", "etfs", "fiis", "bdrs", "fundos", "cripto", "exterior"],
+      custos: { corretagem: 0, custodia: 0, cripto: 1.5, cambio: 1 },
+      destaque: "Prateleira ampla no app do banco, com LCI/LCA, bolsa e conta em dólar (Inter Global).",
+      cuidado: "Compare o CDB do próprio Inter com os de outros emissores oferecidos no app." },
+    { id: "c6", nome: "C6 Bank", tipo: "banco", oferece: ["reserva", "cdb", "tesouro", "acoes", "etfs", "fiis", "exterior"],
+      custos: { corretagem: 0, custodia: 0, cripto: null, cambio: 1.5 },
+      destaque: "CDBs do próprio banco e conta global em dólar no mesmo app.",
+      cuidado: "Confira a liquidez de cada CDB: nem todos permitem resgate diário." },
+    { id: "picpay", nome: "PicPay", tipo: "banco", oferece: ["reserva", "cdb", "cripto"],
+      custos: { corretagem: null, custodia: null, cripto: 2, cambio: null },
+      destaque: "Cofrinhos que rendem com liquidez diária, simples para começar.",
+      cuidado: "Poucas opções além da renda fixa do próprio banco." },
+    { id: "mercadopago", nome: "Mercado Pago", tipo: "banco", oferece: ["reserva", "cripto"],
+      custos: { corretagem: null, custodia: null, cripto: 2, cambio: null },
+      destaque: "Saldo e cofrinhos que rendem automaticamente, com liquidez diária.",
+      cuidado: "Oferta de investimentos limitada; para diversificar, use também uma corretora." },
+    { id: "xp", nome: "XP Investimentos", tipo: "corretora", oferece: ["cdb", "lci", "tesouro", "acoes", "etfs", "fiis", "bdrs", "fundos", "cripto", "exterior"],
+      custos: { corretagem: 0, custodia: 0, cripto: 0.5, cambio: 1 },
+      destaque: "Uma das maiores prateleiras de CDB, LCI/LCA, crédito privado e fundos do país.",
+      cuidado: "Assessores podem sugerir produtos com custo alto (fundos caros, COE). Compare antes de aceitar." },
+    { id: "rico", nome: "Rico", tipo: "corretora", oferece: ["cdb", "lci", "tesouro", "acoes", "etfs", "fiis", "bdrs", "fundos"],
+      custos: { corretagem: 0, custodia: 0, cripto: null, cambio: null },
+      destaque: "Do grupo XP, com prateleira parecida e foco em quem investe sozinho.",
+      cuidado: "Ordens por telefone ou com assessoria podem ter custo." },
+    { id: "clear", nome: "Clear", tipo: "corretora", oferece: ["tesouro", "acoes", "etfs", "fiis", "bdrs"],
+      custos: { corretagem: 0, custodia: 0, cripto: null, cambio: null },
+      destaque: "Foco em bolsa, com plataformas para quem compra e vende com frequência.",
+      cuidado: "Ferramentas de day trade e alavancagem aumentam muito o risco de perda." },
+    { id: "btg", nome: "BTG Pactual", tipo: "corretora", oferece: ["cdb", "lci", "tesouro", "acoes", "etfs", "fiis", "bdrs", "fundos", "cripto", "exterior"],
+      custos: { corretagem: 0, custodia: 0, cripto: 0.5, cambio: 1 },
+      destaque: "Banco de investimento com boa oferta de renda fixa, crédito privado e cripto (Mynt).",
+      cuidado: "Em CDBs de bancos menores, confira o emissor e o limite do FGC." },
+    { id: "binance", nome: "Binance", tipo: "cripto", oferece: ["cripto"],
+      custos: { corretagem: null, custodia: null, cripto: 0.1, cambio: null },
+      destaque: "Maior exchange do mundo, com muitas moedas e taxa de negociação baixa.",
+      cuidado: "A taxa baixa vale no livro de ofertas; na compra rápida (conversão) o custo embutido é maior." },
+    { id: "mercadobitcoin", nome: "Mercado Bitcoin", tipo: "cripto", oferece: ["cripto"],
+      custos: { corretagem: null, custodia: null, cripto: 0.7, cambio: null },
+      destaque: "Exchange brasileira antiga, com depósito por Pix e atendimento no Brasil.",
+      cuidado: "Taxa por operação maior que a das exchanges globais." },
+    { id: "foxbit", nome: "Foxbit", tipo: "cripto", oferece: ["cripto"],
+      custos: { corretagem: null, custodia: null, cripto: 0.5, cambio: null },
+      destaque: "Exchange brasileira com depósito por Pix.",
+      cuidado: "Menos moedas que as exchanges globais." },
+    { id: "avenue", nome: "Avenue", tipo: "exterior", oferece: ["exterior"],
+      custos: { corretagem: null, custodia: null, cripto: null, cambio: 1 },
+      destaque: "Corretora americana (grupo Itaú) para ações e ETFs dos EUA, com app em português.",
+      cuidado: "Investimento no exterior paga 15% de IR ao ano sobre os rendimentos (Lei 14.754/2023)." },
+    { id: "nomad", nome: "Nomad", tipo: "exterior", oferece: ["exterior"],
+      custos: { corretagem: null, custodia: null, cripto: null, cambio: 1.5 },
+      destaque: "Conta em dólar com cartão e investimentos nos EUA no mesmo app.",
+      cuidado: "Investimento no exterior paga 15% de IR ao ano sobre os rendimentos e exige declaração." },
+  ];
+
+  const TIPOS_PLATAFORMA = { banco: "Banco digital", corretora: "Corretora", cripto: "Cripto", exterior: "Exterior" };
+
+  // ETFs amplos para quem está começando na bolsa. Taxa de administração anual aproximada.
+  // Não são recomendação: são índices diversificados, citados como ponto de partida.
+  const ETFS_INICIO = [
+    { ticker: "BOVA11", indice: "Ibovespa: as maiores empresas da B3", taxa: 0.1 },
+    { ticker: "SMAL11", indice: "Small caps: empresas menores da B3", taxa: 0.5 },
+    { ticker: "DIVO11", indice: "Empresas que mais pagam dividendos (IDIV)", taxa: 0.5 },
+    { ticker: "IVVB11", indice: "S&P 500: 500 maiores empresas dos EUA, em reais", taxa: 0.23 },
+    { ticker: "WRLD11", indice: "Ações do mundo todo, em reais", taxa: 0.3 },
   ];
 
   // Correlações aproximadas entre as classes (em R$). Ordem igual a CLASSES.
@@ -193,7 +291,8 @@
     { nome: "Day trade e alavancagem", classe: "ibov", risco: 5, liquidez: "Imediata", ir: "20% sobre o lucro", minimo: "Margem na corretora", para: "Quase ninguém. Estudo da FGV (2019) mostrou que 97% dos que insistiram por mais de 300 dias perderam dinheiro.", cuidado: "Alavancagem pode zerar a conta e gerar dívida." },
   ];
 
-  const Dados = { ANOS, DOLAR, IPCA, CLASSES, QUEDAS_CRIPTO, PREMISSAS, JURO_REAL_PADRAO, INFLACAO_PADRAO, PRODUTOS_RF, CORRELACAO, PERFIS, QUESTOES, INSTRUMENTOS };
+  const Dados = { ANOS, DOLAR, IPCA, CLASSES, QUEDAS_CRIPTO, PREMISSAS, JURO_REAL_PADRAO, INFLACAO_PADRAO, PRODUTOS_RF,
+    TESOURO_EMISSOR, FGC_LIMITE, IOF_CAMBIO, TAXA_B3, OFERTAS, PLATAFORMAS, TIPOS_PLATAFORMA, ETFS_INICIO, CORRELACAO, PERFIS, QUESTOES, INSTRUMENTOS };
   if (typeof module !== "undefined" && module.exports) module.exports = Dados;
   else root.Dados = Dados;
 })(typeof window !== "undefined" ? window : globalThis);

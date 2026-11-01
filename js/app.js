@@ -44,7 +44,7 @@ function gravar() {
   try {
     localStorage.setItem(CHAVE, JSON.stringify({
       perfil: estado.perfil, carteira: estado.carteira, premissasReais: estado.premissas, mercado: estado.mercadoManual,
-      produtosRF: estado.produtosRF,
+      produtosRF: estado.produtosRF, plataformas: estado.plataformas, objetivo: estado.objetivo,
     }));
   } catch { /* sem armazenamento: segue em memória */ }
 }
@@ -74,7 +74,12 @@ function carregarEstado() {
     carteira,
     // As premissas da primeira versão eram nominais; as atuais são reais. Por isso a chave mudou.
     premissas: salvo.premissasReais || {},
-    produtosRF: Array.isArray(salvo.produtosRF) && salvo.produtosRF.length ? salvo.produtosRF : Dados.PRODUTOS_RF.map((p) => ({ ...p })),
+    // Produtos salvos em versões anteriores ganham os campos novos (app, emissor, custódia).
+    produtosRF: (Array.isArray(salvo.produtosRF) && salvo.produtosRF.length ? salvo.produtosRF : Dados.PRODUTOS_RF)
+      .map((p) => ({ plataforma: "", emissor: "", custodia: 0, ...p })),
+    plataformas: salvo.plataformas || {}, // custos dos apps editados pelo usuário
+    objetivo: salvo.objetivo || "reserva", // objetivo escolhido na aba Apps e corretoras
+    tesouro: null, // taxas do Tesouro Direto (data/tesouro.json)
     mercadoManual: salvo.mercado || null,
     bcb: null, // resposta do Banco Central
     cripto: null, // cotações da CoinGecko
@@ -103,7 +108,7 @@ function perfilAtual() {
 }
 
 // ============ Navegação ============
-const ROTAS = ["visao", "perfil", "projecao", "historico", "cripto", "renda-fixa", "onde-investir", "carteira"];
+const ROTAS = ["visao", "perfil", "projecao", "historico", "cripto", "renda-fixa", "onde-investir", "apps", "carteira"];
 const RENDER = {};
 let rotaAtual = null;
 function irPara(rota, rolar) {
@@ -614,66 +619,120 @@ async function carregarCripto() {
 }
 
 // ============ RENDA FIXA ============
-const TIPOS_RF = { cdi: "% do CDI", selic: "% da Selic", poupanca: "Poupança" };
-const mktRF = () => ({ cdi: num("cdi") / 100, selic: num("selic") / 100 });
+const TIPOS_RF = { cdi: "% do CDI", selic: "% da Selic", prefixado: "Prefixado", ipca: "IPCA + taxa", poupanca: "Poupança" };
+const ROTULO_TAXA = { cdi: "Taxa (% do CDI)", selic: "Taxa (% da Selic)", prefixado: "Taxa (% ao ano)", ipca: "Acima do IPCA (% a.a.)", poupanca: "Taxa (regra da poupança)" };
+const mktRF = () => ({ cdi: num("cdi") / 100, selic: num("selic") / 100, ipca: num("ipca") / 100 });
 const corProduto = (i) => css(`--s${(i % 8) + 1}`);
 const produtosValidos = () => estado.produtosRF.filter((p) => p.nome.trim() && (p.tipo === "poupanca" || p.pct > 0));
+const PLATAFORMAS = Dados.PLATAFORMAS;
+const plataforma = (id) => PLATAFORMAS.find((p) => p.id === id);
+
+// Onde comprar o produto: o app cadastrado ou uma indicação genérica.
+function ondeComprar(p) {
+  if (p.plataforma && plataforma(p.plataforma)) return plataforma(p.plataforma).nome;
+  if (p.emissor === Dados.TESOURO_EMISSOR) return "Tesouro Direto, em qualquer corretora";
+  if (p.tipo === "poupanca") return "Qualquer banco";
+  return "Qualquer banco ou corretora";
+}
 
 function descricaoProduto(p) {
-  const partes = [p.tipo === "poupanca" ? "Regra da poupança" : `${pct(p.pct, 0)} ${p.tipo === "selic" ? "da Selic" : "do CDI"}`];
+  const taxa = { poupanca: "Regra da poupança", prefixado: `${pct(p.pct, 2)} ao ano`, ipca: `IPCA + ${pct(p.pct, 2)}`, selic: `${pct(p.pct, 0)} da Selic` }[p.tipo] ?? `${pct(p.pct, 0)} do CDI`;
+  const partes = [taxa];
   if (p.isento) partes.push("isento de IR");
   if (p.teto > 0) partes.push(`até ${brl0(p.teto)}; acima, ${pct(p.pctAcima, 0)} do CDI`);
-  if (p.carencia > 0) partes.push(`carência de ${p.carencia} meses`);
+  if (p.vencimento) partes.push(`vence em ${p.vencimento.slice(3)}`);
+  else if (p.carencia > 0) partes.push(`carência de ${p.carencia} meses`);
+  if (p.custodia > 0) partes.push(`custódia de ${pct(p.custodia, 2)} a.a.`);
   return partes.join(" · ");
 }
 
+function opcoesPlataforma(sel) {
+  const grupos = Object.entries(Dados.TIPOS_PLATAFORMA).map(([tipo, nome]) =>
+    `<optgroup label="${nome}">${PLATAFORMAS.filter((p) => p.tipo === tipo).map((p) => `<option value="${p.id}" ${sel === p.id ? "selected" : ""}>${esc(p.nome)}</option>`).join("")}</optgroup>`).join("");
+  return `<option value="" ${!sel ? "selected" : ""}>Qualquer banco ou corretora</option>${grupos}`;
+}
+
+// Editor de ofertas em cartões (cabe no celular e no computador).
 function renderProdutos() {
-  $("tab-produtos").innerHTML = `<thead><tr><th>Produto</th><th>Índice</th><th>Taxa (%)</th><th>Isento</th><th>Teto (R$)</th><th>Acima do teto</th><th>Carência (meses)</th><th></th></tr></thead><tbody>` +
-    estado.produtosRF.map((p, i) => `<tr>
-      <td><input type="text" id="rf-${i}-nome" data-i="${i}" data-campo="nome" value="${esc(p.nome)}" aria-label="Nome do produto" /></td>
-      <td><select id="rf-${i}-tipo" data-i="${i}" data-campo="tipo" aria-label="Índice de ${esc(p.nome)}">${Object.entries(TIPOS_RF).map(([k, v]) => `<option value="${k}" ${p.tipo === k ? "selected" : ""}>${v}</option>`).join("")}</select></td>
-      <td><input type="number" id="rf-${i}-pct" data-i="${i}" data-campo="pct" value="${p.pct}" min="0" step="1" ${p.tipo === "poupanca" ? "disabled" : ""} aria-label="Taxa de ${esc(p.nome)}" /></td>
-      <td class="centro"><input type="checkbox" id="rf-${i}-isento" data-i="${i}" data-campo="isento" ${p.isento ? "checked" : ""} aria-label="${esc(p.nome)} é isento de IR" /></td>
-      <td><input type="number" id="rf-${i}-teto" data-i="${i}" data-campo="teto" value="${p.teto}" min="0" step="500" aria-label="Teto de ${esc(p.nome)}" /></td>
-      <td><input type="number" id="rf-${i}-pctAcima" data-i="${i}" data-campo="pctAcima" value="${p.pctAcima}" min="0" step="1" ${p.teto > 0 ? "" : "disabled"} aria-label="Taxa acima do teto de ${esc(p.nome)}" /></td>
-      <td><input type="number" id="rf-${i}-carencia" data-i="${i}" data-campo="carencia" value="${p.carencia}" min="0" step="1" aria-label="Carência de ${esc(p.nome)}" /></td>
-      <td><button type="button" data-remover-rf="${i}" aria-label="Remover ${esc(p.nome)}">✕</button></td>
-    </tr>`).join("") + "</tbody>";
+  $("tab-produtos").innerHTML = estado.produtosRF.map((p, i) => {
+    const id = (c) => `rf-${i}-${c}`;
+    const campo = (c, rotulo, controle) => `<label for="${id(c)}">${rotulo}${controle}</label>`;
+    const numero = (c, extra = "") => `<input type="number" id="${id(c)}" data-i="${i}" data-campo="${c}" value="${p[c] ?? 0}" min="0" ${extra} />`;
+    return `<div class="oferta">
+      <div class="oferta-topo">
+        <span class="ponto" style="background:${corProduto(i)}"></span>
+        <input type="text" class="oferta-nome" id="${id("nome")}" data-i="${i}" data-campo="nome" value="${esc(p.nome)}" aria-label="Nome do produto" />
+        <button type="button" data-remover-rf="${i}" aria-label="Remover ${esc(p.nome)}">✕</button>
+      </div>
+      <div class="oferta-campos">
+        ${campo("plataforma", "App", `<select id="${id("plataforma")}" data-i="${i}" data-campo="plataforma">${opcoesPlataforma(p.plataforma)}</select>`)}
+        ${campo("emissor", "Emissor (para o FGC)", `<input type="text" id="${id("emissor")}" data-i="${i}" data-campo="emissor" value="${esc(p.emissor || "")}" placeholder="Ex.: Banco Inter" />`)}
+        ${campo("tipo", "Índice", `<select id="${id("tipo")}" data-i="${i}" data-campo="tipo">${Object.entries(TIPOS_RF).map(([k, v]) => `<option value="${k}" ${p.tipo === k ? "selected" : ""}>${v}</option>`).join("")}</select>`)}
+        ${campo("pct", ROTULO_TAXA[p.tipo] || "Taxa", numero("pct", `step="0.01" ${p.tipo === "poupanca" ? "disabled" : ""}`))}
+        ${campo("teto", "Teto (R$; 0 = sem teto)", numero("teto", 'step="500"'))}
+        ${campo("pctAcima", "Acima do teto (% do CDI)", numero("pctAcima", `step="1" ${p.teto > 0 ? "" : "disabled"}`))}
+        ${campo("carencia", p.vencimento ? "Meses até o vencimento" : "Carência (meses)", numero("carencia", 'step="1"'))}
+        <label class="chave" for="${id("isento")}"><input type="checkbox" id="${id("isento")}" data-i="${i}" data-campo="isento" ${p.isento ? "checked" : ""} /> Isento de IR</label>
+      </div>
+    </div>`;
+  }).join("") || `<div class="vazio-estado">Nenhuma oferta cadastrada. Use "Adicionar produto" para cadastrar a primeira.</div>`;
   tecladoNumerico();
+}
+
+// Plano de renda fixa usado pela aba Renda fixa e pela aba Apps e corretoras.
+function montarPlano({ inicial, mensal, meses, soLiquidez, mkt = mktRF() }) {
+  const base = { inicial, mensal, meses, ...mkt, inflacao: num("ipca") / 100 };
+  const todos = produtosValidos();
+  const candidatos = todos.filter((p) => !soLiquidez || Calc.temLiquidezDiaria(p));
+  const plano = candidatos.length ? Calc.simularPlano({ ...base, produtos: candidatos }) : null;
+  const foraLiquidez = soLiquidez ? todos.filter((p) => !Calc.temLiquidezDiaria(p)) : [];
+  if (!plano) return { plano, base, candidatos, foraLiquidez, foraPrazo: [] };
+  const sozinhos = candidatos.map((p) => ({ p, r: Calc.simularPlano({ ...base, produtos: [p], distribuir: false }) })).filter((x) => x.r);
+  const melhorSozinho = sozinhos.reduce((a, b) => (b.r.liquido > a.r.liquido ? b : a));
+  return { plano, base, candidatos, melhorSozinho, foraLiquidez, foraPrazo: plano.foraPorCarencia };
+}
+
+function textoFora(r) {
+  const nomes = (lista) => [...new Set(lista.map((p) => p.nome))].join(", ");
+  const partes = [];
+  if (r.foraLiquidez.length) partes.push(`sem resgate diário: ${nomes(r.foraLiquidez)}`);
+  const prazo = r.foraPrazo.filter((p) => !r.foraLiquidez.includes(p));
+  if (prazo.length) partes.push(`carência ou vencimento depois do prazo: ${nomes(prazo)}`);
+  return partes.length ? ` Fora do plano (${partes.join("; ")}).` : "";
+}
+
+function htmlAlertaFGC(plano) {
+  const grupos = Calc.concentracaoFGC(plano.porProduto.filter((x) => x.aportado > 0.5), Dados.FGC_LIMITE, Dados.TESOURO_EMISSOR).filter((g) => g.excede);
+  if (!grupos.length) return "";
+  return `<div class="alerta" role="note"><b>Atenção ao limite do FGC.</b> ${grupos.map((g) => `${esc(g.emissor)} termina com ${brl0(g.valor)}`).join("; ")}. O FGC garante até ${brl0(Dados.FGC_LIMITE)} por CPF em cada instituição: divida o valor entre emissores diferentes.</div>`;
 }
 
 function renderPlano() {
   const meses = Math.max(1, Math.min(600, Math.round(num("meses"))));
-  const soLiquidez = $("rf-liquidez").checked;
-  const mkt = mktRF();
-  const base = { inicial: num("inicial"), mensal: num("mensal"), meses, ...mkt, inflacao: num("ipca") / 100 };
-  const candidatos = produtosValidos().filter((p) => !soLiquidez || !(p.carencia > 0));
-  const plano = candidatos.length ? Calc.simularPlano({ ...base, produtos: candidatos }) : null;
+  const r = montarPlano({ inicial: num("inicial"), mensal: num("mensal"), meses, soLiquidez: $("rf-liquidez").checked });
+  const { plano } = r;
   if (!plano) {
     $("plano-kpis").innerHTML = "";
     $("tab-plano").innerHTML = `<tbody><tr><td><div class="vazio-estado">Nenhum produto disponível para esse prazo. Cadastre um produto sem carência ou aumente o prazo.</div></td></tr></tbody>`;
     $("plano-nota").textContent = "";
+    $("plano-fgc").innerHTML = "";
     return;
   }
-  // Comparação: o melhor produto sozinho (com todo o dinheiro).
-  const sozinhos = candidatos.map((p) => ({ p, r: Calc.simularPlano({ ...base, produtos: [p], distribuir: false }) })).filter((x) => x.r);
-  const melhorSozinho = sozinhos.reduce((a, b) => (b.r.liquido > a.r.liquido ? b : a));
-  const ganho = plano.liquido - melhorSozinho.r.liquido;
-  const fora = [...plano.foraPorCarencia, ...(soLiquidez ? produtosValidos().filter((p) => p.carencia > 0) : [])];
-  $("plano-nota").textContent = `Cada aporte vai para o produto com o melhor rendimento líquido no prazo de ${textoPrazo(meses)}. Quando um produto atinge o teto, o restante segue para o próximo.` +
-    (fora.length ? ` Fora do plano: ${[...new Set(fora.map((p) => p.nome))].join(", ")} (${soLiquidez ? "sem liquidez diária" : "carência maior que o prazo"}).` : "");
+  const ganho = plano.liquido - r.melhorSozinho.r.liquido;
+  $("plano-nota").textContent = `Cada aporte vai para o produto com o melhor rendimento líquido no prazo de ${textoPrazo(meses)}. Quando um produto atinge o teto, o restante segue para o próximo.` + textoFora(r);
   $("plano-kpis").innerHTML = `
     <div class="kpi principal"><span class="kpi-rotulo">Líquido no fim</span><span class="kpi-valor">${brl0(plano.liquido)}</span><span class="kpi-sub">${brl0(plano.real)} em reais de hoje</span></div>
     <div class="kpi"><span class="kpi-rotulo">Lucro líquido</span><span class="kpi-valor ganho">${brl0(plano.lucroLiquido)}</span><span class="kpi-sub">sobre ${brl0(plano.investido)} investidos</span></div>
     <div class="kpi"><span class="kpi-rotulo">IR pago</span><span class="kpi-valor">${brl0(plano.ir)}</span><span class="kpi-sub">calculado aporte por aporte</span></div>
-    <div class="kpi"><span class="kpi-rotulo">A mais que o melhor sozinho</span><span class="kpi-valor ${ganho > 0.5 ? "ganho" : ""}">${ganho > 0.5 ? "+" + brl0(ganho) : brl0(0)}</span><span class="kpi-sub">vs. tudo em ${esc(melhorSozinho.p.nome)}</span></div>`;
+    <div class="kpi"><span class="kpi-rotulo">A mais que o melhor sozinho</span><span class="kpi-valor ${ganho > 0.5 ? "ganho" : ""}">${ganho > 0.5 ? "+" + brl0(ganho) : brl0(0)}</span><span class="kpi-sub">vs. tudo em ${esc(r.melhorSozinho.p.nome)}</span></div>`;
   const ativos = plano.porProduto.filter((x) => x.aportado > 0.5);
   $("tab-plano").innerHTML = `<thead><tr><th>Ordem</th><th>Aplicar</th><th>Bruto no fim</th><th>IR</th><th>Líquido</th></tr></thead><tbody>` +
     ativos.map((x, i) => `<tr>
-      <td><span class="nome-classe"><span class="ponto" style="background:${corProduto(estado.produtosRF.indexOf(x.prod))}"></span><span>${i + 1}. ${esc(x.prod.nome)}<span class="sub">${esc(descricaoProduto(x.prod))}</span></span></span></td>
+      <td><span class="nome-classe"><span class="ponto" style="background:${corProduto(estado.produtosRF.indexOf(x.prod))}"></span><span>${i + 1}. ${esc(x.prod.nome)}<span class="sub">${esc(ondeComprar(x.prod))} · ${esc(descricaoProduto(x.prod))}</span></span></span></td>
       <td>${brl0(x.aportado)}${x.prod.teto > 0 && x.aportado >= x.prod.teto - 0.5 ? '<span class="etiqueta">teto</span>' : ""}</td>
       <td>${brl0(x.bruto)}</td><td>${x.ir > 0 ? "−" + brl0(x.ir) : brl0(0)}</td><td><b>${brl0(x.liquido)}</b></td>
     </tr>`).join("") + "</tbody>";
+  $("plano-fgc").innerHTML = htmlAlertaFGC(plano);
 }
 
 function renderEquivalencia() {
@@ -683,8 +742,8 @@ function renderEquivalencia() {
   const vals = lista.map((p) => prazos.map((m) => (p.carencia > m ? null : Calc.equivalenteLiquido(p, m, mkt))));
   const melhores = prazos.map((_, j) => Math.max(...vals.map((v) => v[j] ?? -Infinity)));
   $("tab-equiv").innerHTML = `<thead><tr><th>Produto</th>${prazos.map((m) => `<th>${textoPrazo(m)}</th>`).join("")}</tr></thead><tbody>` +
-    lista.map((p, i) => `<tr><td><span class="nome-classe"><span class="ponto" style="background:${corProduto(estado.produtosRF.indexOf(p))}"></span><span>${esc(p.nome)}<span class="sub">${esc(descricaoProduto(p))}${p.teto > 0 ? " · taxa válida até o teto" : ""}</span></span></span></td>` +
-      vals[i].map((v, j) => v === null ? `<td class="fora">carência</td>` : `<td class="${Math.abs(v - melhores[j]) < 1e-9 ? "vencedor" : ""}">${pct(v)}</td>`).join("") + "</tr>").join("") + "</tbody>";
+    lista.map((p, i) => `<tr><td><span class="nome-classe"><span class="ponto" style="background:${corProduto(estado.produtosRF.indexOf(p))}"></span><span>${esc(p.nome)}<span class="sub">${esc(ondeComprar(p))} · ${esc(descricaoProduto(p))}${p.teto > 0 ? " · taxa válida até o teto" : ""}</span></span></span></td>` +
+      vals[i].map((v, j) => v === null ? `<td class="fora">${p.vencimento ? "só no venc." : "carência"}</td>` : `<td class="${Math.abs(v - melhores[j]) < 1e-9 ? "vencedor" : ""}">${pct(v)}</td>`).join("") + "</tr>").join("") + "</tbody>";
 }
 
 function atualizarSimulador() {
@@ -738,6 +797,7 @@ async function carregarTaxas() {
   estado.bcb = r;
   const ok = ["selic", "cdi", "ipca"].filter((k) => r[k]);
   ok.forEach((k) => ($(k).value = r[k].valor.toFixed(2)));
+  if (r.dolar) $("ap-dolar").value = r.dolar.valor.toFixed(2);
   if (!ok.length) {
     status.textContent = "Sem conexão com o Banco Central aqui. Usando os valores digitados (edite com as taxas atuais).";
   } else {
@@ -779,6 +839,232 @@ function renderCatalogo() {
     </article>`).join("");
 }
 RENDER["onde-investir"] = renderCatalogo;
+
+// ============ APPS E CORRETORAS ============
+const OBJETIVOS = [
+  { id: "reserva", nome: "Reserva de emergência" },
+  { id: "longo", nome: "Dinheiro parado 1 ano ou mais" },
+  { id: "acoes", nome: "Ações, ETFs e FIIs" },
+  { id: "exterior", nome: "Exterior (dólar)" },
+  { id: "cripto", nome: "Cripto" },
+];
+const ROTULO_CUSTO = {
+  corretagem: ["Corretagem (R$ por ordem)", "0.5"],
+  custodia: ["Custódia de ações (% a.a.)", "0.01"],
+  cripto: ["Cripto (% por operação)", "0.05"],
+  cambio: ["Câmbio (spread %)", "0.1"],
+};
+const CUSTOS_POR_OFERTA = { acoes: ["corretagem", "custodia"], cripto: ["cripto"], exterior: ["cambio"] };
+const SITE_GITHUB = "https://alaneto2007-star.github.io/Teste-App-para-investimento-/";
+let filtroApps = "todos";
+let apCdiEditado = false; // o usuário mudou o CDI médio do período? Se não, ele acompanha o CDI atual.
+const custosApp = (id) => ({ ...plataforma(id).custos, ...(estado.plataformas[id] || {}) });
+const oferecem = (oferta) => PLATAFORMAS.filter((p) => p.oferece.includes(oferta));
+const usd = (v) => "US$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function renderObjetivos() {
+  $("ap-objetivos").innerHTML = OBJETIVOS.map((o) => `<button type="button" class="filtro objetivo" data-obj="${o.id}" aria-pressed="${o.id === estado.objetivo}">${o.nome}</button>`).join("");
+  $("form-apps").querySelectorAll("[data-ap]").forEach((el) => (el.hidden = !el.dataset.ap.split(" ").includes(estado.objetivo)));
+}
+
+// Nome do melhor app e, se houver, dos que empatam com ele (diferença menor que R$ 1).
+function tituloComEmpate(lista, valor, extra = "") {
+  const empatados = lista.filter((x) => Math.abs(valor(x) - valor(lista[0])) < 1);
+  const resto = empatados.slice(1).map((x) => esc(x.p.nome));
+  return `${esc(lista[0].p.nome)}${resto.length ? `<span class="onde">empatado com ${resto.join(", ")}</span>` : extra}`;
+}
+
+const cabecalhoMelhor = (titulo, texto) =>
+  `<p class="sobre">Melhor escolha agora</p><h2 class="melhor-titulo">${titulo}</h2>${texto ? `<p class="nota">${texto}</p>` : ""}`;
+
+// No longo prazo o CDI não fica parado. O prefixado do Tesouro com vencimento mais próximo do prazo
+// mostra o CDI médio que o mercado espera até lá (sem descontar o prêmio de risco).
+function prefixadoReferencia(meses) {
+  const pre = (estado.tesouro?.titulos || []).filter((t) => t.tipo === "prefixado");
+  if (!pre.length) return null;
+  return pre.reduce((a, b) => (Math.abs(mesesAte(b.vencimento) - meses) < Math.abs(mesesAte(a.vencimento) - meses) ? b : a));
+}
+
+function mercadoDoObjetivo(reserva, meses) {
+  const atual = mktRF();
+  if (!apCdiEditado) $("ap-cdi").value = (atual.cdi * 100).toFixed(2);
+  const ref = prefixadoReferencia(meses);
+  $("ap-cdi-nota").textContent = ref
+    ? `O ${ref.nome} paga ${pct(ref.taxa, 2)} ao ano: é, na prática, o CDI médio que o mercado espera até ${ref.vencimento.slice(-4)}. Hoje o CDI está em ${pct(atual.cdi * 100, 2)}.`
+    : "Supõe o CDI de hoje durante todo o prazo. Se os juros caírem, prefixados e IPCA+ ficam mais vantajosos: ajuste este valor.";
+  if (reserva) return atual;
+  const cdi = num("ap-cdi") / 100;
+  return { ...atual, cdi, selic: Math.max(0, cdi + (atual.selic - atual.cdi)) };
+}
+
+function renderMelhorRendaFixa() {
+  const reserva = estado.objetivo === "reserva";
+  const meses = reserva ? 12 : +$("ap-prazo").value;
+  const mktPlano = mercadoDoObjetivo(reserva, meses);
+  const r = montarPlano({ inicial: num("ap-valor"), mensal: num("ap-mensal"), meses, soLiquidez: reserva, mkt: mktPlano });
+  if (!r.plano) {
+    $("ap-melhor").innerHTML = cabecalhoMelhor("Nenhuma oferta disponível", "") +
+      `<div class="vazio-estado">Cadastre as ofertas que você vê nos seus apps na aba <a href="#renda-fixa">Renda fixa</a>${reserva ? ", com resgate a qualquer dia" : ""}.</div>`;
+    $("ap-detalhe").innerHTML = "";
+    return;
+  }
+  const eq = (p) => Calc.equivalenteLiquido(p, meses, mktPlano);
+  const passos = r.plano.porProduto.filter((x) => x.aportado > 0.5);
+  const primeiro = passos[0];
+  const poupanca = Calc.simularPlano({ ...r.base, distribuir: false, produtos: [{ id: "ref", nome: "Poupança", tipo: "poupanca", pct: 100, isento: true, teto: 0, pctAcima: 100, carencia: 0 }] });
+  const ganhoPoupanca = r.plano.liquido - poupanca.liquido;
+  $("ap-melhor").innerHTML =
+    cabecalhoMelhor(`${esc(primeiro.prod.nome)}<span class="onde">${esc(ondeComprar(primeiro.prod))}</span>`,
+      `Rende ${pct(eq(primeiro.prod))} do CDI depois do IR em ${textoPrazo(meses)}${primeiro.prod.teto > 0 ? `, até ${brl0(primeiro.prod.teto)}` : ""}.`) +
+    `<ol class="passos">${passos.map((x) => `<li><span class="passo-valor">${brl0(x.aportado)}</span><span><b>${esc(x.prod.nome)}</b><span class="sub">${esc(ondeComprar(x.prod))} · rende ${pct(eq(x.prod))} do CDI líquido${x.prod.teto > 0 && x.aportado >= x.prod.teto - 0.5 ? " · no limite do teto" : ""}</span></span></li>`).join("")}</ol>
+    <div class="kpis">
+      <div class="kpi"><span class="kpi-rotulo">Líquido em ${textoPrazo(meses)}</span><span class="kpi-valor">${brl0(r.plano.liquido)}</span><span class="kpi-sub">${brl0(r.plano.investido)} investidos</span></div>
+      <div class="kpi"><span class="kpi-rotulo">A mais que a poupança</span><span class="kpi-valor ${ganhoPoupanca > 0.5 ? "ganho" : ""}">${ganhoPoupanca > 0.5 ? "+" + brl0(ganhoPoupanca) : brl0(0)}</span><span class="kpi-sub">no mesmo período</span></div>
+    </div>` + htmlAlertaFGC(r.plano) +
+    `<p class="nota">${reserva ? "Só entram produtos com resgate a qualquer dia. IR calculado para 1 ano." : "Prefixados e IPCA+ só garantem a taxa até o vencimento: entram no plano quando o prazo chega ao vencimento."}${textoFora(r)}</p>`;
+  const lista = r.candidatos.filter((p) => (p.carencia || 0) <= meses).map((p) => ({ p, v: eq(p) })).sort((a, b) => b.v - a.v);
+  $("ap-detalhe").innerHTML = `<div class="painel-cabeca"><div><h2>Todas as opções para este objetivo</h2><p class="nota">Rendimento depois do IR em ${textoPrazo(meses)}, em % do CDI. Ofertas com teto valem só até o limite.</p></div><a class="link-acao" href="#renda-fixa">Cadastrar ofertas →</a></div>
+    <div class="rolagem"><table class="tabela"><thead><tr><th>Produto</th><th>Onde</th><th>Rende</th><th>Teto</th></tr></thead><tbody>` +
+    lista.map((x, i) => `<tr class="${i === 0 ? "melhor" : ""}"><td><span class="nome-classe"><span class="ponto" style="background:${corProduto(estado.produtosRF.indexOf(x.p))}"></span><span>${esc(x.p.nome)}<span class="sub">${esc(descricaoProduto(x.p))}</span></span></span></td><td class="texto">${esc(ondeComprar(x.p))}</td><td>${pct(x.v)}</td><td>${x.p.teto > 0 ? brl0(x.p.teto) : "—"}</td></tr>`).join("") +
+    "</tbody></table></div>";
+}
+
+function renderMelhorAcoes() {
+  const valorOrdem = num("ap-ordem"), ordensMes = num("ap-ordens"), saldo = num("ap-saldo");
+  const lista = oferecem("acoes").map((p) => {
+    const c = custosApp(p.id);
+    return { p, c, r: Calc.custoAcoes({ valorOrdem, ordensMes, saldo, corretagem: c.corretagem ?? 0, custodiaPct: c.custodia ?? 0, taxaB3Pct: Dados.TAXA_B3 }) };
+  }).sort((a, b) => a.r.total - b.r.total);
+  const melhor = lista[0], pior = lista.at(-1);
+  const empatados = lista.filter((x) => x.r.total - melhor.r.total < 1);
+  $("ap-melhor").innerHTML = (empatados.length === lista.length
+    ? cabecalhoMelhor("Custo igual nos principais apps", `Com corretagem zero, você paga só as taxas da B3: ${brl(melhor.r.total)} por ano (${pct(melhor.r.pctAportes, 2)} do que investe). Escolha o app que você já usa e acha mais fácil.`)
+    : cabecalhoMelhor(tituloComEmpate(lista, (x) => x.r.total),
+      `Custo de ${brl(melhor.r.total)} por ano, ${brl(pior.r.total - melhor.r.total)} a menos que ${esc(pior.p.nome)}.`)) +
+    `<div class="rolagem"><table class="tabela"><thead><tr><th>App</th><th>Corretagem</th><th>Custódia</th><th>Custo por ano</th></tr></thead><tbody>` +
+    lista.map((x) => `<tr><td>${esc(x.p.nome)}</td><td>${brl(x.c.corretagem ?? 0)}</td><td>${pct(x.c.custodia ?? 0, 2)}</td><td>${brl(x.r.total)}</td></tr>`).join("") +
+    `</tbody></table></div><p class="nota">As taxas da B3 (cerca de ${pct(Dados.TAXA_B3, 2)} por operação) são iguais em todos os apps. Corretagem e custódia são valores de referência: confira no app e corrija no catálogo abaixo.</p>`;
+  $("ap-detalhe").innerHTML = `<h2>Por onde começar na bolsa</h2>
+    <p class="nota">O hub não indica ação específica: isso depende de análise individual e é atividade regulada pela CVM. Um caminho simples para começar são os ETFs, que compram dezenas de empresas de uma vez.</p>
+    <div class="etfs">${Dados.ETFS_INICIO.map((e) => `<div class="etf"><b>${e.ticker}</b><span>${esc(e.indice)}</span><span class="sub">Taxa de administração ≈ ${pct(e.taxa, 2)} ao ano</span></div>`).join("")}</div>
+    <p class="nota">Não é recomendação. Taxas aproximadas: confira no site da gestora. A venda de ETF paga 15% de IR sobre o lucro, sem a isenção de R$ 20 mil por mês que vale para ações.</p>`;
+}
+
+function renderMelhorExterior() {
+  const valor = num("ap-valor"), iof = num("ap-iof"), dolar = num("ap-dolar");
+  const vivo = estado.bcb?.dolar;
+  $("ap-dolar-nota").textContent = vivo ? `Dólar do Banco Central de ${vivo.data}.` : "Cotação de exemplo: edite com a do dia.";
+  const lista = oferecem("exterior").map((p) => ({ p, c: custosApp(p.id) })).filter((x) => x.c.cambio != null)
+    .map((x) => ({ ...x, r: Calc.custoExterior({ valor, spreadPct: x.c.cambio, iofPct: iof, dolar }) }))
+    .sort((a, b) => b.r.chega - a.r.chega);
+  const m = lista[0];
+  const chega = (r) => (dolar ? usd(r.emDolar) : brl(r.chega));
+  $("ap-melhor").innerHTML = cabecalhoMelhor(tituloComEmpate(lista, (x) => x.r.chega), `Enviando ${brl0(valor)}, chegam ${chega(m.r)} na conta depois do IOF e do spread de câmbio (custo de ${brl(m.r.custo)}).`) +
+    `<div class="rolagem"><table class="tabela"><thead><tr><th>App</th><th>Spread</th><th>Custo</th><th>Chega</th></tr></thead><tbody>` +
+    lista.map((x) => `<tr><td>${esc(x.p.nome)}</td><td>${pct(x.c.cambio, 2)}</td><td>${brl(x.r.custo)}</td><td>${chega(x.r)}</td></tr>`).join("") +
+    `</tbody></table></div><p class="nota">Spread de referência: o custo exato aparece na tela de envio do app. Rendimentos no exterior pagam 15% de IR ao ano (Lei 14.754/2023) e precisam ser declarados.</p>`;
+  $("ap-detalhe").innerHTML = `<h2>Sem enviar dinheiro para fora</h2>
+    <p class="nota">ETFs na B3, como IVVB11 (S&amp;P 500) e WRLD11 (ações do mundo todo), dão exposição ao exterior e ao dólar pela corretora brasileira, sem câmbio nem IOF. A taxa de administração fica embutida no preço e a venda paga 15% de IR sobre o lucro.</p>`;
+}
+
+function renderMelhorCripto() {
+  const valor = num("ap-valor");
+  const lista = oferecem("cripto").map((p) => ({ p, c: custosApp(p.id) })).filter((x) => x.c.cripto != null)
+    .map((x) => ({ ...x, r: Calc.custoCripto({ valor, taxaPct: x.c.cripto }) }))
+    .sort((a, b) => a.r.custo - b.r.custo);
+  const m = lista[0];
+  $("ap-melhor").innerHTML = cabecalhoMelhor(tituloComEmpate(lista, (x) => x.r.custo, `<span class="onde">${Dados.TIPOS_PLATAFORMA[m.p.tipo]}</span>`),
+    `Comprar e depois vender ${brl0(valor)} custa cerca de ${brl(m.r.custo)} (${pct(m.r.pct, 2)}), contra ${brl(lista.at(-1).r.custo)} no app mais caro.`) +
+    `<div class="rolagem"><table class="tabela"><thead><tr><th>App</th><th>Tipo</th><th>Por operação</th><th>Comprar e vender</th></tr></thead><tbody>` +
+    lista.map((x) => `<tr><td>${esc(x.p.nome)}</td><td class="texto">${Dados.TIPOS_PLATAFORMA[x.p.tipo]}</td><td>${pct(x.c.cripto, 2)}</td><td>${brl(x.r.custo)}</td></tr>`).join("") +
+    `</tbody></table></div><p class="nota">Taxas e spreads de referência: confira no app. Em apps de banco, o custo costuma vir embutido no preço.</p>`;
+  $("ap-detalhe").innerHTML = `<h2>Exchange, app do banco ou ETF?</h2>
+    <ul class="lista-texto">
+      <li><b>Exchange</b> (Binance, Mercado Bitcoin, Foxbit): custo menor e você pode levar as moedas para a sua própria carteira. Vendas de até R$ 35 mil por mês são isentas de IR.</li>
+      <li><b>App do banco ou corretora</b>: mais simples, tudo no mesmo lugar, mas o custo embutido costuma ser maior.</li>
+      <li><b>ETFs na B3</b> (QBTC11, BITH11, HASH11): compra pela corretora, como uma ação. Têm taxa de administração anual e pagam 15% de IR sobre o lucro, sem isenção.</li>
+    </ul>`;
+}
+
+function renderMelhor() {
+  const fn = { reserva: renderMelhorRendaFixa, longo: renderMelhorRendaFixa, acoes: renderMelhorAcoes, exterior: renderMelhorExterior, cripto: renderMelhorCripto }[estado.objetivo] || renderMelhorRendaFixa;
+  fn();
+}
+
+// ---- Tesouro Direto (taxas oficiais em data/tesouro.json, gravadas pelo robô do GitHub)
+function taxaTesouroTexto(t) {
+  if (/selic/i.test(t.tipoTitulo)) return `Selic + ${t.taxa.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}%`;
+  if (/prefixado/i.test(t.tipoTitulo)) return `${pct(t.taxa, 2)} ao ano`;
+  if (/igp/i.test(t.tipoTitulo)) return `IGP-M + ${pct(t.taxa, 2)}`;
+  return `IPCA + ${pct(t.taxa, 2)}`;
+}
+const idTesouro = (t) => "td-" + t.nome.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+function mesesAte(dataBR) {
+  const [d, m, a] = dataBR.split("/").map(Number);
+  return Math.max(1, Math.round((new Date(a, m - 1, d) - new Date()) / (1000 * 60 * 60 * 24 * 30.44)));
+}
+// Converte um título em oferta. Selic: liquidez diária e isenção de custódia até R$ 10 mil.
+// Prefixado e IPCA+: a taxa só é garantida no vencimento, que entra como "carência".
+function produtoDoTesouro(t) {
+  const selic = t.tipo === "selic";
+  return {
+    id: idTesouro(t), nome: t.nome, tipo: t.tipo, pct: selic ? 100 : t.taxa, isento: false, teto: 0, pctAcima: 100,
+    carencia: selic ? 0 : mesesAte(t.vencimento), plataforma: "", emissor: Dados.TESOURO_EMISSOR, custodia: selic ? 0 : 0.2, vencimento: t.vencimento,
+  };
+}
+
+function renderTesouro() {
+  const d = estado.tesouro;
+  const cab = `<div class="painel-cabeca"><div><h2>Tesouro Direto hoje</h2><p class="nota">${d ? `Taxas oficiais de ${esc(d.dataBase)}, iguais em qualquer corretora. Fonte: Tesouro Transparente.` : "Taxas oficiais, atualizadas todo dia útil por um robô do GitHub."}</p></div></div>`;
+  if (!d) {
+    $("ap-tesouro").innerHTML = cab + `<div class="vazio-estado">As taxas do Tesouro carregam no <a href="${SITE_GITHUB}#apps" target="_blank" rel="noopener">site do GitHub</a>. Aqui elas não estão disponíveis; se quiser, cadastre os títulos à mão na aba Renda fixa.</div>`;
+    return;
+  }
+  $("ap-tesouro").innerHTML = cab + `<div class="rolagem"><table class="tabela"><thead><tr><th>Título</th><th>Vence em</th><th>Taxa</th><th>Preço de 1 título</th><th></th></tr></thead><tbody>` +
+    d.titulos.map((t, i) => {
+      const ja = estado.produtosRF.some((p) => p.id === idTesouro(t));
+      const acao = t.tipo
+        ? `<button type="button" class="botao fantasma pequeno" data-tesouro="${i}" ${ja ? "disabled" : ""}>${ja ? "Nas ofertas ✓" : "Adicionar às ofertas"}</button>`
+        : `<span class="sub" title="Paga juros semestrais ou renda mensal; o simulador ainda não modela esse fluxo">Só consulta</span>`;
+      return `<tr><td>${esc(t.nome)}</td><td>${esc(t.vencimento)}</td><td>${esc(taxaTesouroTexto(t))}</td><td>${brl(t.pu)}</td><td>${acao}</td></tr>`;
+    }).join("") +
+    `</tbody></table></div><p class="nota">Ao adicionar, o título entra nas ofertas com a custódia da B3 de 0,20% ao ano (o Tesouro Selic é isento até R$ 10 mil). Prefixado e IPCA+ só garantem a taxa se você ficar até o vencimento.</p>`;
+}
+
+function renderCatalogoApps() {
+  const tipos = [["todos", "Todos"], ...Object.entries(Dados.TIPOS_PLATAFORMA)];
+  $("ap-filtro").innerHTML = tipos.map(([id, nome]) => `<button type="button" class="filtro" data-fa="${id}" aria-pressed="${id === filtroApps}">${nome}</button>`).join("");
+  $("ap-catalogo").innerHTML = PLATAFORMAS.filter((p) => filtroApps === "todos" || p.tipo === filtroApps).map((p) => {
+    const c = custosApp(p.id);
+    const campos = Object.entries(CUSTOS_POR_OFERTA).filter(([o]) => p.oferece.includes(o)).flatMap(([, cs]) => cs);
+    return `<article class="painel app-cartao">
+      <div class="inst-topo"><h3>${esc(p.nome)}</h3><span class="selo">${Dados.TIPOS_PLATAFORMA[p.tipo]}</span></div>
+      <p class="nota">${esc(p.destaque)}</p>
+      <ul class="chips" aria-label="O que oferece">${p.oferece.map((o) => `<li>${Dados.OFERTAS[o]}</li>`).join("")}</ul>
+      ${campos.length ? `<div class="app-custos">${campos.map((k) => `<label for="apc-${p.id}-${k}">${ROTULO_CUSTO[k][0]}<input type="number" id="apc-${p.id}-${k}" data-app="${p.id}" data-custo="${k}" step="${ROTULO_CUSTO[k][1]}" min="0" value="${c[k] ?? ""}" /></label>`).join("")}</div>` : ""}
+      <p class="cuidado"><b>Cuidado:</b> ${esc(p.cuidado)}</p>
+      <p class="ref">${estado.plataformas[p.id] ? "Custos editados por você" : "Custos de referência (2025): confira no app"}</p>
+    </article>`;
+  }).join("");
+  tecladoNumerico();
+}
+
+RENDER.apps = () => { renderObjetivos(); renderMelhor(); renderTesouro(); renderCatalogoApps(); };
+
+async function carregarTesouro() {
+  estado.tesouro = await Live.tesouro();
+  if (estado.tesouro) {
+    // Mantém atualizadas as taxas dos títulos que já estão nas ofertas.
+    let mudou = false;
+    estado.tesouro.titulos.filter((t) => t.tipo).forEach((t) => {
+      const p = estado.produtosRF.find((x) => x.id === idTesouro(t));
+      if (p) { Object.assign(p, produtoDoTesouro(t), { nome: p.nome, plataforma: p.plataforma }); mudou = true; }
+    });
+    if (mudou) gravar();
+  }
+  if (rotaAtual === "apps") { renderTesouro(); renderMelhor(); }
+  else if (rotaAtual === "renda-fixa") RENDER["renda-fixa"]();
+}
 
 // ============ CARTEIRA ============
 function renderCarteira() {
@@ -888,8 +1174,12 @@ function ligarEventos() {
     const { i, campo } = e.target.dataset;
     if (i === undefined || !campo) return;
     const p = estado.produtosRF[+i];
-    if (campo === "nome") p.nome = e.target.value;
-    else if (campo === "tipo") p.tipo = e.target.value;
+    if (campo === "tipo") {
+      if (p.tipo === e.target.value) return;
+      p.tipo = e.target.value;
+      p.pct = { cdi: 100, selic: 100, prefixado: 13, ipca: 7, poupanca: 100 }[p.tipo];
+      redesenhar = true;
+    } else if (["nome", "plataforma", "emissor"].includes(campo)) p[campo] = e.target.value;
     else if (campo === "isento") p.isento = e.target.checked;
     else p[campo] = Math.max(0, parseFloat(e.target.value) || 0);
     gravar();
@@ -908,7 +1198,7 @@ function ligarEventos() {
     gravar(); renderProdutos(); atualizarSimulador();
   });
   $("rf-adicionar").addEventListener("click", () => {
-    estado.produtosRF.push({ id: "p" + Date.now(), nome: "Novo CDB", tipo: "cdi", pct: 105, isento: false, teto: 0, pctAcima: 100, carencia: 0 });
+    estado.produtosRF.push({ id: "p" + Date.now(), nome: "Novo CDB", tipo: "cdi", pct: 105, isento: false, teto: 0, pctAcima: 100, carencia: 0, plataforma: "", emissor: "", custodia: 0 });
     gravar(); renderProdutos(); atualizarSimulador(); tecladoNumerico();
     $(`rf-${estado.produtosRF.length - 1}-nome`).select();
   });
@@ -919,6 +1209,52 @@ function ligarEventos() {
   $("btn-taxas").addEventListener("click", carregarTaxas);
   $("form-reserva").addEventListener("input", atualizarReserva);
   $("form-meta").addEventListener("input", atualizarMeta);
+
+  // Apps e corretoras
+  $("ap-objetivos").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-obj]");
+    if (!b) return;
+    estado.objetivo = b.dataset.obj;
+    gravar();
+    renderObjetivos();
+    renderMelhor();
+  });
+  $("form-apps").addEventListener("input", (e) => {
+    if (e.target.id === "ap-cdi") apCdiEditado = true;
+    renderMelhor();
+  });
+  $("ap-tesouro").addEventListener("click", (e) => {
+    const i = e.target.closest("[data-tesouro]")?.dataset.tesouro;
+    if (i === undefined || !estado.tesouro) return;
+    const novo = produtoDoTesouro(estado.tesouro.titulos[+i]);
+    const j = estado.produtosRF.findIndex((p) => p.id === novo.id);
+    if (j >= 0) estado.produtosRF[j] = novo;
+    else estado.produtosRF.push(novo);
+    gravar();
+    renderTesouro();
+    renderMelhor();
+  });
+  $("ap-filtro").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-fa]");
+    if (!b) return;
+    filtroApps = b.dataset.fa;
+    renderCatalogoApps();
+  });
+  $("ap-catalogo").addEventListener("input", (e) => {
+    const { app, custo } = e.target.dataset;
+    if (!app) return;
+    const v = parseFloat(e.target.value);
+    estado.plataformas[app] = { ...(estado.plataformas[app] || {}), [custo]: Number.isFinite(v) ? Math.max(0, v) : 0 };
+    gravar();
+    e.target.closest(".app-cartao").querySelector(".ref").textContent = "Custos editados por você";
+    renderMelhor();
+  });
+  $("ap-restaurar").addEventListener("click", () => {
+    estado.plataformas = {};
+    gravar();
+    renderCatalogoApps();
+    renderMelhor();
+  });
 
   // Onde investir
   $("filtro-risco").addEventListener("click", (e) => {
@@ -969,4 +1305,5 @@ function ligarEventos() {
   irPara(location.hash.slice(1) || "visao", false);
   carregarTaxas();
   carregarCripto();
+  carregarTesouro();
 })();

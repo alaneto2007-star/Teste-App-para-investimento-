@@ -45,6 +45,7 @@
       <a href="#cripto" data-rota="cripto">Cripto</a>
       <a href="#renda-fixa" data-rota="renda-fixa">Renda fixa</a>
       <a href="#onde-investir" data-rota="onde-investir">Onde investir</a>
+      <a href="#apps" data-rota="apps">Apps e corretoras</a>
       <a href="#carteira" data-rota="carteira">Minha carteira</a>
     </nav>
 
@@ -272,11 +273,11 @@
             <article class="painel">
               <div class="painel-cabeca">
                 <div>
-                  <h2>Seus produtos</h2>
-                  <p class="nota">Teto: até quanto o saldo rende a taxa principal (0 = sem teto). O que passar do teto rende a taxa "acima do teto". Carência: meses antes de poder resgatar.</p>
+                  <h2>Suas ofertas</h2>
+                  <p class="nota">Cadastre as taxas que você vê nos seus apps. Teto: até quanto o saldo rende a taxa principal (0 = sem teto); o que passar rende a taxa "acima do teto". Carência: meses antes de poder resgatar. Emissor: quem deve o dinheiro, para conferir o limite do FGC.</p>
                 </div>
               </div>
-              <div class="rolagem"><table class="tabela tabela-edicao" id="tab-produtos"></table></div>
+              <div class="ofertas" id="tab-produtos"></div>
               <div class="acoes">
                 <button type="button" class="botao fantasma" id="rf-adicionar">+ Adicionar produto</button>
                 <button type="button" class="botao fantasma" id="rf-restaurar">Restaurar produtos padrão</button>
@@ -292,6 +293,7 @@
               </div>
               <div class="kpis" id="plano-kpis"></div>
               <div class="rolagem"><table class="tabela" id="tab-plano"></table></div>
+              <div id="plano-fgc"></div>
             </article>
 
             <article class="painel">
@@ -347,9 +349,63 @@
           <h1 id="t-onde">Onde investir hoje, do menor ao maior risco</h1>
           <p class="lead">21 formas de investir disponíveis para pessoa física no Brasil, com liquidez, imposto e o principal cuidado de cada uma.</p>
         </div>
+        <p class="nota"><a class="link-acao quebra" href="#apps">Qual app usar para cada um? Compare em Apps e corretoras →</a></p>
         <div class="filtros" role="group" aria-label="Filtrar por risco" id="filtro-risco"></div>
         <p class="aviso">Regras de imposto de renda conforme a legislação de 2025. Elas mudam com frequência: confirme na Receita Federal ou com sua corretora antes de investir.</p>
         <div class="catalogo" id="catalogo"></div>
+      </section>
+
+      <!-- ============ APPS E CORRETORAS ============ -->
+      <section class="vista" id="v-apps" aria-labelledby="t-apps" hidden>
+        <div class="cabeca">
+          <p class="sobre">Apps e corretoras</p>
+          <h1 id="t-apps">Onde vale mais a pena aplicar hoje</h1>
+          <p class="lead">Escolha o objetivo. O hub compara as ofertas que você cadastrou, as taxas oficiais do Tesouro e os custos de cada app, e mostra onde o seu dinheiro rende mais ou custa menos.</p>
+        </div>
+        <div class="objetivos" role="group" aria-label="Objetivo" id="ap-objetivos"></div>
+        <div class="grade-lateral">
+          <form class="painel" id="form-apps">
+            <h2>Seus números</h2>
+            <label for="ap-valor" data-ap="reserva longo exterior cripto">Quanto vai aplicar (R$)<input type="number" id="ap-valor" value="10000" min="0" step="500" /></label>
+            <label for="ap-mensal" data-ap="reserva longo">Aporte mensal (R$)<input type="number" id="ap-mensal" value="500" min="0" step="50" /></label>
+            <label for="ap-prazo" data-ap="longo">Prazo
+              <select id="ap-prazo">
+                <option value="12">1 ano</option>
+                <option value="24" selected>2 anos</option>
+                <option value="36">3 anos</option>
+                <option value="60">5 anos</option>
+                <option value="120">10 anos</option>
+              </select>
+            </label>
+            <label for="ap-cdi" data-ap="longo">CDI médio no período (% a.a.)<input type="number" id="ap-cdi" min="0" step="0.25" /></label>
+            <p class="nota dica" id="ap-cdi-nota" data-ap="longo"></p>
+            <label for="ap-ordem" data-ap="acoes">Valor de cada compra (R$)<input type="number" id="ap-ordem" value="500" min="0" step="50" /></label>
+            <label for="ap-ordens" data-ap="acoes">Compras por mês<input type="number" id="ap-ordens" value="2" min="0" step="1" /></label>
+            <label for="ap-saldo" data-ap="acoes">Quanto você tem em ações (R$)<input type="number" id="ap-saldo" value="10000" min="0" step="1000" /></label>
+            <label for="ap-iof" data-ap="exterior">IOF do câmbio (%)<input type="number" id="ap-iof" value="1.1" min="0" step="0.1" /></label>
+            <label for="ap-dolar" data-ap="exterior">Dólar (R$)<input type="number" id="ap-dolar" value="5.50" min="0" step="0.01" /></label>
+            <p class="nota dica" id="ap-dolar-nota" data-ap="exterior"></p>
+            <p class="nota" data-ap="reserva longo">As taxas de mercado (CDI, Selic e IPCA) vêm da aba <a href="#renda-fixa">Renda fixa</a>, onde você também cadastra as ofertas.</p>
+            <p class="nota" data-ap="exterior">Confira o IOF vigente: a regra mudou algumas vezes em 2025.</p>
+          </form>
+          <div class="pilha">
+            <article class="painel melhor-escolha" id="ap-melhor" aria-live="polite"></article>
+            <article class="painel" id="ap-detalhe"></article>
+          </div>
+        </div>
+        <article class="painel" id="ap-tesouro"></article>
+        <article class="painel">
+          <div class="painel-cabeca">
+            <div>
+              <h2>Catálogo de apps</h2>
+              <p class="nota">O que cada um oferece, o principal cuidado e os custos usados nas comparações. Os custos são editáveis: corrija com o que você vê no app.</p>
+            </div>
+            <button type="button" class="botao fantasma" id="ap-restaurar">Restaurar custos de referência</button>
+          </div>
+          <div class="filtros" role="group" aria-label="Filtrar apps por tipo" id="ap-filtro"></div>
+          <div class="catalogo" id="ap-catalogo"></div>
+        </article>
+        <p class="aviso">Custos e características são referências de 2025 e mudam com frequência: confira no app antes de aplicar. O hub não tem parceria com nenhum app e não ganha nada por mostrar um ou outro.</p>
       </section>
 
       <!-- ============ CARTEIRA ============ -->

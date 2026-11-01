@@ -29,6 +29,7 @@ App web para estudar investimentos: perfil de risco, projeção Monte Carlo, his
 | **Renda fixa** | Produtos editáveis com teto (ex.: 115% do CDI até R$ 5 mil), taxa acima do teto e carência. Calcula a melhor divisão do dinheiro entre eles, com IR por aporte, opção "só liquidez diária" e tabela de rendimento líquido por prazo. Também tem reserva de emergência e prazo para metas. |
 | **Onde investir** | 20 instrumentos, do Tesouro Selic ao day trade, com risco, liquidez, IR, mínimo e principal cuidado. |
 | **Apps e corretoras** | Escolha o objetivo (reserva, dinheiro parado, ações/ETFs/FIIs, exterior, cripto) e veja onde rende mais ou custa menos: plano passo a passo com o app de cada etapa, alerta do limite do FGC, taxas oficiais do Tesouro Direto e catálogo de 14 apps com custos editáveis. Não indica ação específica. |
+| **Manual** | Como cada investimento faz o dinheiro voltar para você (juros, dividendos, aluguéis, valorização), calculadora de quanto rende por mês com as taxas do dia, 14 investimentos explicados com exemplos em reais, guia de cada aba e glossário. |
 | **Minha carteira** | Cadastro dos seus investimentos, comparação com o alvo do perfil e divisão do próximo aporte para rebalancear. |
 
 ## Dados
@@ -37,6 +38,13 @@ App web para estudar investimentos: perfil de risco, projeção Monte Carlo, his
 - **Histórico 2016–2024:** retornos anuais aproximados de CDI e IPCA (BCB/IBGE), IMA-B (Anbima), Ibovespa e IFIX (B3), S&P 500 com dividendos, ouro, Bitcoin e Ethereum, com ativos em dólar convertidos para reais. Ficam em `js/data.js`.
 - **Premissas da projeção:** retorno real (acima da inflação), volatilidade, custo anual e alíquota de IR por classe, e correlações aproximadas, também em `js/data.js`.
 - **% do CDI:** aplicado sobre a taxa diária (252 dias úteis), como fazem os bancos.
+
+## Recursos de uso
+
+- **Comece por aqui** (Visão geral): checklist com os 6 passos do plano, marcados conforme você avança.
+- **Botões "?"**: explicam termos como CDI, FGC, carência e marcação a mercado, com link para o glossário do manual.
+- **Seus dados** (fim da Visão geral): "Copiar meus dados" gera um código; "Colar dados de outro aparelho" importa esse código em outro navegador.
+- **Projeção sem travar**: o Monte Carlo roda num Web Worker (`js/projecao-worker.js`); se o navegador não permitir (arquivo aberto do computador), roda na página.
 
 ## Taxas do Tesouro Direto (robô do GitHub)
 
@@ -52,6 +60,7 @@ js/calc.js          cálculos: juros, IR, estatísticas, backtest, Monte Carlo, 
 js/charts.js        gráficos em SVG (linhas com faixas, barras, rosca, dispersão, minigráfico)
 js/live.js          busca de dados no Banco Central e na CoinGecko
 js/app.js           interface
+js/projecao-worker.js  projeção Monte Carlo fora da tela principal
 scripts/            robô do Tesouro (download e leitura do CSV)
 tests/calc.test.js  testes dos cálculos
 tests/tesouro.test.mjs  testes do leitor do CSV do Tesouro

@@ -47,6 +47,7 @@
       <a href="#onde-investir" data-rota="onde-investir">Onde investir</a>
       <a href="#apps" data-rota="apps">Apps e corretoras</a>
       <a href="#carteira" data-rota="carteira">Minha carteira</a>
+      <a href="#manual" data-rota="manual">Manual</a>
     </nav>
 
     <main id="conteudo">
@@ -57,6 +58,8 @@
           <h1 id="t-visao">Risco e retorno, lado a lado</h1>
           <p class="lead">Compare as principais classes de investimento do Brasil e do exterior, descubra seu perfil e projete seu patrimônio com milhares de cenários.</p>
         </div>
+
+        <article class="painel comece-painel" id="comece"></article>
 
         <div class="grade-2">
           <article class="painel" id="cartao-perfil"></article>
@@ -83,6 +86,35 @@
           </div>
           <div class="rolagem"><table class="tabela" id="tab-classes"></table></div>
         </article>
+
+        <article class="painel" id="dados">
+          <div class="painel-cabeca">
+            <div>
+              <h2>Seus dados</h2>
+              <p class="nota">Perfil, carteira, ofertas e custos ficam salvos só neste navegador. Para usar no celular e no computador, copie o código aqui e cole no outro aparelho.</p>
+            </div>
+          </div>
+          <div class="acoes">
+            <button type="button" class="botao pequeno" id="dados-copiar">Copiar meus dados</button>
+            <button type="button" class="botao fantasma pequeno" id="dados-colar-abrir">Colar dados de outro aparelho</button>
+          </div>
+          <p class="status" id="dados-status" role="status"></p>
+          <textarea id="dados-codigo" class="codigo" rows="3" readonly hidden aria-label="Código dos seus dados"></textarea>
+          <div id="dados-importar" class="importar" hidden>
+            <label for="dados-entrada">Cole o código copiado no outro aparelho<textarea id="dados-entrada" class="codigo" rows="3" placeholder="IS1:..."></textarea></label>
+            <div class="acoes">
+              <button type="button" class="botao pequeno" id="dados-importar-btn">Importar</button>
+              <button type="button" class="botao fantasma pequeno" id="dados-cancelar">Cancelar</button>
+            </div>
+            <div class="alerta" id="dados-confirmar" hidden>
+              <p><b>Isso substitui os dados deste navegador</b> pelos do código: perfil, carteira, ofertas e custos. Não dá para desfazer.</p>
+              <div class="acoes">
+                <button type="button" class="botao pequeno" id="dados-confirmar-sim">Substituir meus dados</button>
+                <button type="button" class="botao fantasma pequeno" id="dados-confirmar-nao">Cancelar</button>
+              </div>
+            </div>
+          </div>
+        </article>
       </section>
 
       <!-- ============ PERFIL ============ -->
@@ -101,7 +133,7 @@
       <!-- ============ PROJEÇÃO ============ -->
       <section class="vista" id="v-projecao" aria-labelledby="t-projecao" hidden>
         <div class="cabeca">
-          <p class="sobre">Projeção Monte Carlo</p>
+          <p class="sobre">Projeção Monte Carlo <button type="button" class="termo" data-termo="montecarlo" aria-label="O que é Monte Carlo?" aria-expanded="false">?</button></p>
           <h1 id="t-projecao">Milhares de futuros possíveis para o seu dinheiro</h1>
           <p class="lead">Cada cenário sorteia retornos mês a mês, respeitando a volatilidade e a correlação entre as classes. Tudo em reais de hoje, já descontando custos e imposto, com aportes corrigidos pela inflação.</p>
         </div>
@@ -111,10 +143,10 @@
             <label for="pj-inicial">Valor inicial (R$)<input type="number" id="pj-inicial" value="10000" min="0" step="1000" /></label>
             <label for="pj-mensal">Aporte mensal (R$)<input type="number" id="pj-mensal" value="1000" min="0" step="100" /></label>
             <label for="pj-anos">Prazo (anos)<input type="number" id="pj-anos" value="15" min="1" max="40" /></label>
-            <label for="pj-juroreal">Juro real de longo prazo (% a.a.)<input type="number" id="pj-juroreal" value="4.5" min="-5" max="15" step="0.25" /></label>
+            <label for="pj-juroreal">Juro real de longo prazo (% a.a.) <button type="button" class="termo" data-termo="juroReal" aria-label="O que é juro real?" aria-expanded="false">?</button><input type="number" id="pj-juroreal" value="4.5" min="-5" max="15" step="0.25" /></label>
             <p class="nota dica" id="pj-juroreal-dica"></p>
             <label for="pj-inflacao">Inflação esperada (% a.a.)<input type="number" id="pj-inflacao" value="4" min="0" max="30" step="0.25" /></label>
-            <label class="chave" for="pj-ir"><input type="checkbox" id="pj-ir" checked /> Descontar IR no resgate</label>
+            <label class="chave" for="pj-ir"><input type="checkbox" id="pj-ir" checked /> Descontar IR no resgate <button type="button" class="termo" data-termo="ir" aria-label="O que é IR regressivo?" aria-expanded="false">?</button></label>
             <label for="pj-carteira">Carteira
               <select id="pj-carteira">
                 <option value="conservador">Conservador</option>
@@ -261,12 +293,12 @@
             <label for="inicial">Valor inicial (R$)<input type="number" id="inicial" value="10000" min="0" step="500" /></label>
             <label for="mensal">Aporte mensal (R$)<input type="number" id="mensal" value="500" min="0" step="50" /></label>
             <label for="meses">Prazo (meses)<input type="number" id="meses" value="24" min="1" max="600" /></label>
-            <label class="chave" for="rf-liquidez"><input type="checkbox" id="rf-liquidez" /> Só liquidez diária (reserva de emergência)</label>
+            <label class="chave" for="rf-liquidez"><input type="checkbox" id="rf-liquidez" /> Só liquidez diária (reserva de emergência) <button type="button" class="termo" data-termo="liquidez" aria-label="O que é liquidez?" aria-expanded="false">?</button></label>
             <h2>Taxas</h2>
             <p class="status" id="status-taxas"></p>
-            <label for="selic">Selic (% a.a.)<input type="number" id="selic" value="15" min="0" step="0.05" /></label>
-            <label for="cdi">CDI (% a.a.)<input type="number" id="cdi" value="14.9" min="0" step="0.05" /></label>
-            <label for="ipca">Inflação, IPCA (% a.a.)<input type="number" id="ipca" value="4.5" min="0" step="0.1" /></label>
+            <label for="selic">Selic (% a.a.) <button type="button" class="termo" data-termo="selic" aria-label="O que é Selic?" aria-expanded="false">?</button><input type="number" id="selic" value="15" min="0" step="0.05" /></label>
+            <label for="cdi">CDI (% a.a.) <button type="button" class="termo" data-termo="cdi" aria-label="O que é CDI?" aria-expanded="false">?</button><input type="number" id="cdi" value="14.9" min="0" step="0.05" /></label>
+            <label for="ipca">Inflação, IPCA (% a.a.) <button type="button" class="termo" data-termo="ipca" aria-label="O que é IPCA?" aria-expanded="false">?</button><input type="number" id="ipca" value="4.5" min="0" step="0.1" /></label>
             <button type="button" class="botao fantasma" id="btn-taxas">Buscar taxas do Banco Central</button>
           </form>
           <div class="pilha">
@@ -377,12 +409,12 @@
                 <option value="120">10 anos</option>
               </select>
             </label>
-            <label for="ap-cdi" data-ap="longo">CDI médio no período (% a.a.)<input type="number" id="ap-cdi" min="0" step="0.25" /></label>
+            <label for="ap-cdi" data-ap="longo">CDI médio no período (% a.a.) <button type="button" class="termo" data-termo="cdi" aria-label="O que é CDI?" aria-expanded="false">?</button><input type="number" id="ap-cdi" min="0" step="0.25" /></label>
             <p class="nota dica" id="ap-cdi-nota" data-ap="longo"></p>
             <label for="ap-ordem" data-ap="acoes">Valor de cada compra (R$)<input type="number" id="ap-ordem" value="500" min="0" step="50" /></label>
             <label for="ap-ordens" data-ap="acoes">Compras por mês<input type="number" id="ap-ordens" value="2" min="0" step="1" /></label>
             <label for="ap-saldo" data-ap="acoes">Quanto você tem em ações (R$)<input type="number" id="ap-saldo" value="10000" min="0" step="1000" /></label>
-            <label for="ap-iof" data-ap="exterior">IOF do câmbio (%)<input type="number" id="ap-iof" value="1.1" min="0" step="0.1" /></label>
+            <label for="ap-iof" data-ap="exterior">IOF do câmbio (%) <button type="button" class="termo" data-termo="iof" aria-label="O que é IOF?" aria-expanded="false">?</button><input type="number" id="ap-iof" value="1.1" min="0" step="0.1" /></label>
             <label for="ap-dolar" data-ap="exterior">Dólar (R$)<input type="number" id="ap-dolar" value="5.50" min="0" step="0.01" /></label>
             <p class="nota dica" id="ap-dolar-nota" data-ap="exterior"></p>
             <p class="nota" data-ap="reserva longo">As taxas de mercado (CDI, Selic e IPCA) vêm da aba <a href="#renda-fixa">Renda fixa</a>, onde você também cadastra as ofertas.</p>
@@ -452,6 +484,37 @@
             </article>
           </div>
         </div>
+      </section>
+
+      <!-- ============ MANUAL ============ -->
+      <section class="vista" id="v-manual" aria-labelledby="t-manual" hidden>
+        <div class="cabeca">
+          <p class="sobre">Manual</p>
+          <h1 id="t-manual">Como o seu dinheiro cresce, e como usar o hub</h1>
+          <p class="lead">Um guia em linguagem simples: de onde vem o retorno de cada investimento, quanto ele rende por mês com as taxas de hoje e o que cada parte do hub faz.</p>
+        </div>
+        <nav class="manual-indice" aria-label="Partes do manual">
+          <button type="button" data-secao="m-mecanismos">1. Como o dinheiro volta</button>
+          <button type="button" data-secao="m-renda">2. Quanto rende por mês</button>
+          <button type="button" data-secao="m-investimentos">3. Cada investimento</button>
+          <button type="button" data-secao="m-hub">4. Como usar o hub</button>
+          <button type="button" data-secao="m-glossario">5. Glossário</button>
+        </nav>
+        <article class="painel" id="m-mecanismos"></article>
+        <article class="painel" id="m-renda">
+          <h2>Quanto rende por mês</h2>
+          <p class="nota">Digite um valor e veja quanto ele rende por mês em cada investimento, já descontado o IR. Ajuste as estimativas de FIIs e ações se quiser.</p>
+          <form id="form-renda" class="campos-renda">
+            <label for="m-valor">Valor aplicado (R$)<input type="number" id="m-valor" value="10000" min="0" step="1000" /></label>
+            <label for="m-fii">Rendimento dos FIIs (% ao ano)<input type="number" id="m-fii" value="10" min="0" step="0.5" /></label>
+            <label for="m-acoes">Dividendos das ações (% ao ano)<input type="number" id="m-acoes" value="6" min="0" step="0.5" /></label>
+          </form>
+          <div class="rolagem"><table class="tabela" id="tab-renda"></table></div>
+          <p class="nota" id="renda-nota"></p>
+        </article>
+        <div class="pilha" id="m-investimentos"></div>
+        <article class="painel" id="m-hub"></article>
+        <article class="painel" id="m-glossario"></article>
       </section>
 
       <footer class="rodape">

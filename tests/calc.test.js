@@ -239,4 +239,32 @@ assert.strictEqual(new Set(idsPlat).size, idsPlat.length);
 for (const p of Dados.PLATAFORMAS) for (const o of p.oferece) assert.ok(Dados.OFERTAS[o], p.id + ": " + o);
 for (const p of Dados.PRODUTOS_RF) assert.ok(!p.plataforma || idsPlat.includes(p.plataforma), p.id);
 
+// ---------- Manual e backup ----------
+// R$ 10 mil a 12% a.a., IR de 15% => R$ 80,65 por mês
+perto(Calc.rendaMensal({ valor: 10000, taxaAnual: 0.12, ir: 0.15 }), 10000 * (Math.pow(1.12, 1 / 12) - 1) * 0.85, 1e-9);
+perto(Calc.rendaMensal({ valor: 10000, taxaAnual: 0.12, ir: 0.15 }), 80.65, 0.01);
+assert.strictEqual(Calc.rendaMensal({ valor: 10000, taxaAnual: 0 }), 0);
+
+// Ida e volta do código de backup, com acentos e números
+const dadosTeste = { perfil: { id: "moderado", respostas: [1, 2, 3, 0, 2, 1] }, carteira: { itens: [{ nome: "Tesouro IPCA+ 2045 — ação", classe: "ipca", valor: 1234.56 }], exemplo: false }, objetivo: "reserva" };
+const codigo = Calc.exportarCodigo(dadosTeste);
+assert.ok(codigo.startsWith("IS1:"));
+assert.deepStrictEqual(Calc.importarCodigo(codigo), dadosTeste);
+assert.deepStrictEqual(Calc.importarCodigo("  " + codigo.slice(0, 20) + "\n" + codigo.slice(20) + "  "), dadosTeste); // quebras de linha coladas
+assert.throws(() => Calc.importarCodigo("abc"), /precisa começar com IS1/);
+assert.throws(() => Calc.importarCodigo("IS1:!!!não é base64"), /incompleto ou foi alterado/);
+assert.throws(() => Calc.importarCodigo(codigo.slice(0, codigo.length - 8)), /incompleto ou foi alterado/);
+assert.throws(() => Calc.importarCodigo(Calc.exportarCodigo([1, 2])), /não tem dados/);
+
+// Dados do manual: termos com definição, investimentos com mecanismo e rota válidos
+for (const [id, g] of Object.entries(Dados.GLOSSARIO)) assert.ok(g.termo && g.def.length > 20, id);
+const mecs = Dados.MANUAL_MECANISMOS.map((m) => m.id);
+const rotasApp = ["visao", "perfil", "projecao", "historico", "cripto", "renda-fixa", "onde-investir", "apps", "carteira", "manual"];
+for (const inv of Dados.MANUAL_INVESTIMENTOS) {
+  assert.ok(mecs.includes(inv.mecanismo), inv.id);
+  assert.ok(rotasApp.includes(inv.rota), inv.id);
+  for (const campo of ["frase", "comoGanha", "quando", "riscos", "imposto"]) assert.ok(inv[campo], inv.id + "." + campo);
+}
+for (const a of Dados.GUIA_ABAS) assert.ok(rotasApp.includes(a.rota) && a.passos.length, a.rota);
+
 console.log("Todos os testes passaram.");

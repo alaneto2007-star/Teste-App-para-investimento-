@@ -226,6 +226,37 @@
     return { chega, custo: valor - chega, emDolar: dolar ? chega / dolar : null, pct: valor ? ((valor - chega) / valor) * 100 : 0 };
   }
 
+  // Renda mensal média de um valor aplicado a uma taxa anual, já descontado o IR (fração, ex.: 0,15).
+  function rendaMensal({ valor, taxaAnual, ir = 0 }) {
+    return valor * (Math.pow(1 + taxaAnual, 1 / 12) - 1) * (1 - ir);
+  }
+
+  // ---------- Backup dos dados (levar para outro aparelho) ----------
+  const PREFIXO_CODIGO = "IS1:";
+
+  // Objeto -> texto "IS1:" + base64 do JSON em UTF-8 (acentos preservados).
+  function exportarCodigo(obj) {
+    const bytes = new TextEncoder().encode(JSON.stringify(obj));
+    let bin = "";
+    for (const b of bytes) bin += String.fromCharCode(b);
+    return PREFIXO_CODIGO + btoa(bin);
+  }
+
+  // Texto -> objeto. Erros com mensagens que dizem ao usuário o que fazer.
+  function importarCodigo(texto) {
+    const t = String(texto || "").replace(/\s+/g, "");
+    if (!t.startsWith(PREFIXO_CODIGO)) throw new Error("O código precisa começar com IS1:. Copie o código inteiro no outro aparelho e cole de novo.");
+    let obj;
+    try {
+      const bin = atob(t.slice(PREFIXO_CODIGO.length));
+      obj = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
+    } catch {
+      throw new Error("O código está incompleto ou foi alterado. Copie de novo no outro aparelho.");
+    }
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) throw new Error("Esse código não tem dados do Invest Simulador.");
+    return obj;
+  }
+
   // Juro real pela equação de Fisher: (1 + nominal) / (1 + inflação) - 1.
   function juroReal(nominal, inflacao) {
     return (1 + nominal) / (1 + inflacao) - 1;
@@ -454,7 +485,7 @@
   const Calc = {
     taxaMensal, valorReal, aliquotaIR, taxaPoupanca, simular, produtos, reservaEmergencia, mesesParaMeta, juroReal,
     taxaPctCDI, taxaProduto, temLiquidezDiaria, equivalenteLiquido, simularPlano, concentracaoFGC,
-    custoAcoes, custoCripto, custoExterior,
+    custoAcoes, custoCripto, custoExterior, rendaMensal, exportarCodigo, importarCodigo,
     estatisticas, retornosCarteira, backtest, gerador, cholesky, monteCarlo, perfilPorRespostas, rebalancear,
   };
 

@@ -25,6 +25,11 @@ const corClasse = (id) => {
 const nomeClasse = (id) => (id === "outros" ? "Outros" : classe(id)?.nome ?? id);
 const curtoClasse = (id) => (id === "outros" ? "Outros" : classe(id)?.curto ?? id);
 const NOMES_RISCO = ["", "Muito baixo", "Baixo", "Médio", "Alto", "Muito alto"];
+// Botão "?" que abre a explicação de um termo do glossário.
+const termo = (id) => {
+  const g = Dados.GLOSSARIO[id];
+  return g ? `<button type="button" class="termo" data-termo="${id}" aria-label="O que é ${esc(g.termo)}?" aria-expanded="false">?</button>` : "";
+};
 const medidorRisco = (n, compacto) =>
   `<span class="risco" data-n="${n}" title="Risco ${n} de 5: ${NOMES_RISCO[n]}"><span class="risco-barras">${"<i></i>".repeat(5)}</span>${compacto ? "" : NOMES_RISCO[n]}</span>`;
 
@@ -40,12 +45,16 @@ const CHAVE = "invest-simulador:v2";
 function ler(chave) {
   try { return JSON.parse(localStorage.getItem(chave)); } catch { return null; }
 }
+// Tudo o que o usuário preenche: é o que fica salvo no navegador e o que vai no código de backup.
+function dadosParaSalvar() {
+  return {
+    perfil: estado.perfil, carteira: estado.carteira, premissasReais: estado.premissas, mercado: estado.mercadoManual,
+    produtosRF: estado.produtosRF, plataformas: estado.plataformas, objetivo: estado.objetivo, visitas: estado.visitas,
+  };
+}
 function gravar() {
   try {
-    localStorage.setItem(CHAVE, JSON.stringify({
-      perfil: estado.perfil, carteira: estado.carteira, premissasReais: estado.premissas, mercado: estado.mercadoManual,
-      produtosRF: estado.produtosRF, plataformas: estado.plataformas, objetivo: estado.objetivo,
-    }));
+    localStorage.setItem(CHAVE, JSON.stringify(dadosParaSalvar()));
   } catch { /* sem armazenamento: segue em memória */ }
 }
 
@@ -80,6 +89,7 @@ function carregarEstado() {
     plataformas: salvo.plataformas || {}, // custos dos apps editados pelo usuário
     objetivo: salvo.objetivo || "reserva", // objetivo escolhido na aba Apps e corretoras
     tesouro: null, // taxas do Tesouro Direto (data/tesouro.json)
+    visitas: salvo.visitas || {}, // abas já abertas (para o "Comece por aqui")
     mercadoManual: salvo.mercado || null,
     bcb: null, // resposta do Banco Central
     cripto: null, // cotações da CoinGecko
@@ -108,12 +118,14 @@ function perfilAtual() {
 }
 
 // ============ Navegação ============
-const ROTAS = ["visao", "perfil", "projecao", "historico", "cripto", "renda-fixa", "onde-investir", "apps", "carteira"];
+const ROTAS = ["visao", "perfil", "projecao", "historico", "cripto", "renda-fixa", "onde-investir", "apps", "carteira", "manual"];
 const RENDER = {};
 let rotaAtual = null;
 function irPara(rota, rolar) {
   if (!ROTAS.includes(rota)) rota = "visao";
   rotaAtual = rota;
+  fecharBalao();
+  if (!estado.visitas[rota]) { estado.visitas[rota] = true; gravar(); }
   ROTAS.forEach((r) => ($("v-" + r).hidden = r !== rota));
   document.querySelectorAll(".menu a").forEach((a) => {
     if (a.dataset.rota === rota) a.setAttribute("aria-current", "page");
@@ -151,6 +163,8 @@ function renderFita() {
     ["Juro real", pct(real, 2)],
   ];
   if (estado.bcb?.dolar) itens.push(["Dólar", "R$ " + estado.bcb.dolar.valor.toLocaleString("pt-BR", { minimumFractionDigits: 4 })]);
+  const ipcaLongo = tituloMaisProximo("ipca", 120);
+  if (ipcaLongo) itens.push([`IPCA+ ${ipcaLongo.vencimento.slice(-4)}`, `IPCA + ${pct(ipcaLongo.taxa, 2)}`]);
   const extra = (estado.cripto || []).filter((c) => ["bitcoin", "ethereum"].includes(c.id)).map((c) => [
     c.simbolo, brl0(c.preco), c.var24h,
   ]);
@@ -273,7 +287,46 @@ function renderTabelaClasses() {
     <tbody>${linhas}<tr><td><span class="nome-classe"><span class="ponto" style="background:${css("--tinta-3")}"></span><span>Inflação (IPCA)<span class="sub">Quanto os preços subiram no período</span></span></span></td><td></td><td></td><td>${pct(ipca.acumulado * 100, 0, true)}</td><td>${pct(ipca.cagr * 100, 1)}</td><td></td><td></td></tr></tbody>`;
 }
 
-RENDER.visao = () => { renderCartaoPerfil(); renderCartaoCarteira(); renderMapa(); renderTabelaClasses(); };
+// "Comece por aqui": passos do plano, marcados conforme o que o usuário já fez.
+function passosComeco() {
+  const { porClasse } = alocacaoCarteira();
+  const reservaIdeal = Calc.reservaEmergencia(num("gastos"), $("perfil-trab").value).valor;
+  const carteiraPropria = !estado.carteira.exemplo && estado.carteira.itens.length > 0;
+  const ofertasProprias = estado.produtosRF.some((p) => {
+    const d = Dados.PRODUTOS_RF.find((x) => x.id === p.id);
+    return !d || d.pct !== p.pct || d.plataforma !== p.plataforma || d.teto !== p.teto || d.nome !== p.nome;
+  });
+  return [
+    { feito: !!estado.perfil.id, titulo: "Descubra seu perfil", texto: "6 perguntas para saber quanto risco faz sentido para você.", rota: "perfil" },
+    { feito: carteiraPropria && reservaIdeal > 0 && (porClasse.cdi || 0) >= reservaIdeal, titulo: "Monte a reserva de emergência",
+      texto: `Sua reserva ideal é de ${brl0(reservaIdeal)} (calcule na aba Renda fixa). Ela vem antes de qualquer investimento com risco.`, rota: "renda-fixa" },
+    { feito: ofertasProprias, titulo: "Cadastre as ofertas dos seus apps", texto: "As taxas que você vê no Nubank, no Inter, na XP… para o hub comparar.", rota: "renda-fixa" },
+    { feito: !!estado.visitas.apps, titulo: "Veja onde aplicar", texto: "O melhor app e o melhor produto para cada objetivo.", rota: "apps" },
+    { feito: carteiraPropria, titulo: "Registre sua carteira", texto: "Para o hub dizer como dividir o próximo aporte.", rota: "carteira" },
+    { feito: !!estado.visitas.manual, titulo: "Leia o manual", texto: "Como cada investimento faz o seu dinheiro crescer.", rota: "manual" },
+  ];
+}
+
+function renderComecePorAqui() {
+  const passos = passosComeco();
+  const feitos = passos.filter((p) => p.feito).length;
+  const prox = passos.find((p) => !p.feito);
+  $("comece").innerHTML = `
+    <div class="painel-cabeca"><div>
+      <p class="sobre">Comece por aqui</p>
+      <h2>${prox ? `Seu plano em ${passos.length} passos` : "Tudo pronto"}</h2>
+      <p class="nota">${prox ? `${feitos} de ${passos.length} feitos. Próximo passo: ${prox.titulo.toLowerCase()}.` : "Volte uma vez por mês para atualizar a carteira e ver onde aplicar o próximo aporte."}</p>
+    </div></div>
+    <div class="progresso" role="progressbar" aria-label="Passos feitos" aria-valuemin="0" aria-valuemax="${passos.length}" aria-valuenow="${feitos}"><i style="width:${(feitos / passos.length) * 100}%"></i></div>
+    <ol class="comece">${passos.map((p, i) => `
+      <li class="${p.feito ? "feito" : ""}${p === prox ? " proximo" : ""}">
+        <span class="marca-passo" aria-hidden="true">${p.feito ? "✓" : i + 1}</span>
+        <span class="passo-texto"><b>${esc(p.titulo)}</b><span class="visualmente-oculto">${p.feito ? " (feito)" : " (pendente)"}</span><span class="sub">${esc(p.texto)}</span></span>
+        <a class="botao pequeno${p === prox ? "" : " fantasma"}" href="#${p.rota}">${p.feito ? "Rever" : "Fazer agora"}</a>
+      </li>`).join("")}</ol>`;
+}
+
+RENDER.visao = () => { renderComecePorAqui(); renderCartaoPerfil(); renderCartaoCarteira(); renderMapa(); renderTabelaClasses(); };
 
 // ============ PERFIL ============
 function montarQuestionario() {
@@ -370,6 +423,40 @@ function agendarProjecao() {
   timerProj = setTimeout(rodarProjecao, 180);
 }
 
+// A projeção roda num Web Worker quando possível, para a tela não travar enquanto você digita.
+// Se o worker não existir (arquivo aberto do computador) ou não responder, calcula aqui mesmo.
+let workerProj = null, workerConfirmado = false, pedidoProj = 0, pendenteProj = null, timerWorker = null;
+function iniciarWorkerProjecao() {
+  try {
+    workerProj = new Worker("js/projecao-worker.js");
+  } catch {
+    workerProj = null;
+    return;
+  }
+  workerProj.onmessage = (e) => {
+    const { id, r, erro } = e.data || {};
+    workerConfirmado = true;
+    clearTimeout(timerWorker);
+    if (!pendenteProj || id !== pendenteProj.id) return; // resposta de um pedido antigo
+    const p = pendenteProj;
+    pendenteProj = null;
+    if (erro) p.local();
+    else desenharProjecao(r, p.ctx);
+  };
+  workerProj.onerror = (e) => {
+    e.preventDefault?.();
+    desligarWorker();
+  };
+}
+function desligarWorker() {
+  clearTimeout(timerWorker);
+  try { workerProj?.terminate(); } catch { /* já encerrado */ }
+  workerProj = null;
+  const p = pendenteProj;
+  pendenteProj = null;
+  p?.local();
+}
+
 function rodarProjecao() {
   const anos = Math.max(1, Math.min(40, Math.round(num("pj-anos")) || 1));
   const { aloc } = alocacaoProjecao();
@@ -377,16 +464,31 @@ function rodarProjecao() {
   const descontarIR = $("pj-ir").checked;
   const m = mercado();
   const hoje = Calc.juroReal(m.selic / 100, m.ipca / 100) * 100;
-  $("pj-juroreal-dica").textContent = `Hoje: ${pct(hoje)} (Selic menos IPCA). Média das últimas duas décadas: cerca de 4,5%. Juros altos assim costumam não durar.`;
-  const r = Calc.monteCarlo({
+  const refIpca = tituloMaisProximo("ipca", anos * 12);
+  $("pj-juroreal-dica").textContent = `Hoje: ${pct(hoje)} (Selic menos IPCA). Média das últimas duas décadas: cerca de 4,5%.` +
+    (refIpca ? ` O ${refIpca.nome} garante hoje IPCA + ${pct(refIpca.taxa, 2)} para quem ficar até o vencimento.` : " Juros altos assim costumam não durar.");
+  const params = {
     alocacao: aloc, premissas: premissas(), ids: IDS, correlacao: Dados.CORRELACAO,
     inicial: num("pj-inicial"), mensal: num("pj-mensal"), anos, inflacao, descontarIR, sims: anos > 20 ? 1200 : 2000,
-  });
+  };
+  const ctx = { anos, inflacao, descontarIR };
+  const id = ++pedidoProj;
+  const local = () => { if (id === pedidoProj) desenharProjecao(Calc.monteCarlo(params), ctx); };
+  if (!workerProj) return local();
+  pendenteProj = { id, ctx, local };
+  workerProj.postMessage({ id, params });
+  if (!workerConfirmado) {
+    clearTimeout(timerWorker);
+    timerWorker = setTimeout(desligarWorker, 3000);
+  }
+}
+
+function desenharProjecao(r, { anos, inflacao, descontarIR }) {
   $("g-proj").style.opacity = 1;
   const anoFim = new Date().getFullYear() + anos;
   const liq = descontarIR ? "líquido, " : "";
   $("pj-kpis").innerHTML = `
-    <div class="kpi principal"><span class="kpi-rotulo">Cenário mediano</span><span class="kpi-valor">${brl0(r.final.p50)}</span><span class="kpi-sub">${liq}em reais de hoje · ≈ ${brlC(r.final.p50 * r.deflator)} em valores de ${anoFim}</span></div>
+    <div class="kpi principal"><span class="kpi-rotulo">Cenário mediano ${termo("mediana")}</span><span class="kpi-valor">${brl0(r.final.p50)}</span><span class="kpi-sub">${liq}em reais de hoje · ≈ ${brlC(r.final.p50 * r.deflator)} em valores de ${anoFim}</span></div>
     <div class="kpi"><span class="kpi-rotulo">Cenário ruim (5%)</span><span class="kpi-valor">${brl0(r.final.p5)}</span><span class="kpi-sub">95% dos cenários terminam acima</span></div>
     <div class="kpi"><span class="kpi-rotulo">Cenário bom (95%)</span><span class="kpi-valor">${brl0(r.final.p95)}</span><span class="kpi-sub">só 5% terminam acima</span></div>
     <div class="kpi"><span class="kpi-rotulo">Abaixo do investido</span><span class="kpi-valor ${r.probPerda > 0.05 ? "perda" : ""}">${pct(r.probPerda * 100, 1)}</span><span class="kpi-sub">chance de perder poder de compra</span></div>
@@ -422,7 +524,7 @@ function renderPremissas() {
   const p = premissas();
   const campo = (c, nome, passo, extra = "") =>
     `<td><input type="number" step="${passo}" id="pm-${nome}-${c.id}" data-id="${c.id}" data-campo="${nome}" value="${p[c.id][nome]}" ${extra} aria-label="${nome} de ${esc(c.nome)}" /></td>`;
-  $("tab-premissas").innerHTML = `<thead><tr><th>Classe</th><th>Retorno real a.a.</th><th>Volatilidade</th><th>Custo a.a.</th><th>IR no resgate</th></tr></thead><tbody>` +
+  $("tab-premissas").innerHTML = `<thead><tr><th>Classe</th><th>Retorno real a.a.</th><th>Volatilidade ${termo("volatilidade")}</th><th>Custo a.a.</th><th>IR no resgate</th></tr></thead><tbody>` +
     CLASSES.map((c) => `<tr>
       <td><span class="nome-classe"><span class="ponto" style="background:${corClasse(c.id)}"></span>${esc(c.nome)}</span></td>
       ${campo(c, "ret", 0.5, c.id === "cdi" ? 'disabled title="Segue o juro real de longo prazo"' : "")}
@@ -666,13 +768,13 @@ function renderProdutos() {
       </div>
       <div class="oferta-campos">
         ${campo("plataforma", "App", `<select id="${id("plataforma")}" data-i="${i}" data-campo="plataforma">${opcoesPlataforma(p.plataforma)}</select>`)}
-        ${campo("emissor", "Emissor (para o FGC)", `<input type="text" id="${id("emissor")}" data-i="${i}" data-campo="emissor" value="${esc(p.emissor || "")}" placeholder="Ex.: Banco Inter" />`)}
+        ${campo("emissor", `Emissor (para o FGC) ${termo("fgc")}`, `<input type="text" id="${id("emissor")}" data-i="${i}" data-campo="emissor" value="${esc(p.emissor || "")}" placeholder="Ex.: Banco Inter" />`)}
         ${campo("tipo", "Índice", `<select id="${id("tipo")}" data-i="${i}" data-campo="tipo">${Object.entries(TIPOS_RF).map(([k, v]) => `<option value="${k}" ${p.tipo === k ? "selected" : ""}>${v}</option>`).join("")}</select>`)}
         ${campo("pct", ROTULO_TAXA[p.tipo] || "Taxa", numero("pct", `step="0.01" ${p.tipo === "poupanca" ? "disabled" : ""}`))}
-        ${campo("teto", "Teto (R$; 0 = sem teto)", numero("teto", 'step="500"'))}
+        ${campo("teto", `Teto (R$; 0 = sem teto) ${termo("teto")}`, numero("teto", 'step="500"'))}
         ${campo("pctAcima", "Acima do teto (% do CDI)", numero("pctAcima", `step="1" ${p.teto > 0 ? "" : "disabled"}`))}
-        ${campo("carencia", p.vencimento ? "Meses até o vencimento" : "Carência (meses)", numero("carencia", 'step="1"'))}
-        <label class="chave" for="${id("isento")}"><input type="checkbox" id="${id("isento")}" data-i="${i}" data-campo="isento" ${p.isento ? "checked" : ""} /> Isento de IR</label>
+        ${campo("carencia", p.vencimento ? `Meses até o vencimento ${termo("vencimento")}` : `Carência (meses) ${termo("carencia")}`, numero("carencia", 'step="1"'))}
+        <label class="chave" for="${id("isento")}"><input type="checkbox" id="${id("isento")}" data-i="${i}" data-campo="isento" ${p.isento ? "checked" : ""} /> Isento de IR ${termo("isento")}</label>
       </div>
     </div>`;
   }).join("") || `<div class="vazio-estado">Nenhuma oferta cadastrada. Use "Adicionar produto" para cadastrar a primeira.</div>`;
@@ -849,10 +951,10 @@ const OBJETIVOS = [
   { id: "cripto", nome: "Cripto" },
 ];
 const ROTULO_CUSTO = {
-  corretagem: ["Corretagem (R$ por ordem)", "0.5"],
-  custodia: ["Custódia de ações (% a.a.)", "0.01"],
-  cripto: ["Cripto (% por operação)", "0.05"],
-  cambio: ["Câmbio (spread %)", "0.1"],
+  corretagem: ["Corretagem (R$ por ordem)", "0.5", "corretagem"],
+  custodia: ["Custódia de ações (% a.a.)", "0.01", "custodia"],
+  cripto: ["Cripto (% por operação)", "0.05", "spread"],
+  cambio: ["Câmbio (spread %)", "0.1", "spread"],
 };
 const CUSTOS_POR_OFERTA = { acoes: ["corretagem", "custodia"], cripto: ["cripto"], exterior: ["cambio"] };
 const SITE_GITHUB = "https://alaneto2007-star.github.io/Teste-App-para-investimento-/";
@@ -879,11 +981,12 @@ const cabecalhoMelhor = (titulo, texto) =>
 
 // No longo prazo o CDI não fica parado. O prefixado do Tesouro com vencimento mais próximo do prazo
 // mostra o CDI médio que o mercado espera até lá (sem descontar o prêmio de risco).
-function prefixadoReferencia(meses) {
-  const pre = (estado.tesouro?.titulos || []).filter((t) => t.tipo === "prefixado");
-  if (!pre.length) return null;
-  return pre.reduce((a, b) => (Math.abs(mesesAte(b.vencimento) - meses) < Math.abs(mesesAte(a.vencimento) - meses) ? b : a));
+function tituloMaisProximo(tipo, meses) {
+  const lista = (estado.tesouro?.titulos || []).filter((t) => t.tipo === tipo);
+  if (!lista.length) return null;
+  return lista.reduce((a, b) => (Math.abs(mesesAte(b.vencimento) - meses) < Math.abs(mesesAte(a.vencimento) - meses) ? b : a));
 }
+const prefixadoReferencia = (meses) => tituloMaisProximo("prefixado", meses);
 
 function mercadoDoObjetivo(reserva, meses) {
   const atual = mktRF();
@@ -1020,15 +1123,48 @@ function renderTesouro() {
     $("ap-tesouro").innerHTML = cab + `<div class="vazio-estado">As taxas do Tesouro carregam no <a href="${SITE_GITHUB}#apps" target="_blank" rel="noopener">site do GitHub</a>. Aqui elas não estão disponíveis; se quiser, cadastre os títulos à mão na aba Renda fixa.</div>`;
     return;
   }
-  $("ap-tesouro").innerHTML = cab + `<div class="rolagem"><table class="tabela"><thead><tr><th>Título</th><th>Vence em</th><th>Taxa</th><th>Preço de 1 título</th><th></th></tr></thead><tbody>` +
-    d.titulos.map((t, i) => {
-      const ja = estado.produtosRF.some((p) => p.id === idTesouro(t));
-      const acao = t.tipo
-        ? `<button type="button" class="botao fantasma pequeno" data-tesouro="${i}" ${ja ? "disabled" : ""}>${ja ? "Nas ofertas ✓" : "Adicionar às ofertas"}</button>`
-        : `<span class="sub" title="Paga juros semestrais ou renda mensal; o simulador ainda não modela esse fluxo">Só consulta</span>`;
-      return `<tr><td>${esc(t.nome)}</td><td>${esc(t.vencimento)}</td><td>${esc(taxaTesouroTexto(t))}</td><td>${brl(t.pu)}</td><td>${acao}</td></tr>`;
-    }).join("") +
-    `</tbody></table></div><p class="nota">Ao adicionar, o título entra nas ofertas com a custódia da B3 de 0,20% ao ano (o Tesouro Selic é isento até R$ 10 mil). Prefixado e IPCA+ só garantem a taxa se você ficar até o vencimento.</p>`;
+  const linha = ({ t, i }) => {
+    const ja = estado.produtosRF.some((p) => p.id === idTesouro(t));
+    const acao = t.tipo
+      ? `<button type="button" class="botao fantasma pequeno" data-tesouro="${i}" ${ja ? "disabled" : ""}>${ja ? "Nas ofertas ✓" : "Adicionar às ofertas"}</button>`
+      : `<span class="sub">Só consulta</span>`;
+    return `<tr><td>${esc(t.nome)}</td><td>${esc(t.vencimento)}</td><td>${esc(taxaTesouroTexto(t))}</td><td>${brl(t.pu)}</td><td>${acao}</td></tr>`;
+  };
+  const tabela = (lista) => `<div class="rolagem"><table class="tabela"><thead><tr><th>Título</th><th>Vence em</th><th>Taxa</th><th>Preço de 1 título</th><th></th></tr></thead><tbody>${lista.map(linha).join("")}</tbody></table></div>`;
+  const todos = d.titulos.map((t, i) => ({ t, i }));
+  const principais = todos.filter((x) => x.t.tipo);
+  const outros = todos.filter((x) => !x.t.tipo);
+  $("ap-tesouro").innerHTML = cab +
+    `<div class="curvas">
+      <figure class="curva"><figcaption>Prefixado <span class="sub">taxa ao ano</span></figcaption><div class="grafico" id="g-curva-pre"></div></figure>
+      <figure class="curva"><figcaption>IPCA+ <span class="sub">juro acima da inflação</span></figcaption><div class="grafico" id="g-curva-ipca"></div></figure>
+    </div>
+    <p class="nota">Cada ponto é um título e a linha é a "curva de juros": quanto o governo paga para cada prazo. Passe o mouse ou toque nos pontos.</p>` +
+    tabela(principais) +
+    `<p class="nota">Ao adicionar, o título entra nas ofertas com a custódia da B3 de 0,20% ao ano (o Tesouro Selic é isento até R$ 10 mil). Prefixado e IPCA+ só garantem a taxa se você ficar até o vencimento ${termo("marcacao")}.</p>` +
+    (outros.length ? `<details class="outros-titulos"><summary>Outros títulos (${outros.length}): Educa+, Renda+ e com juros semestrais</summary>
+      <ul class="lista-texto">
+        <li><b>Tesouro Educa+</b>: junta dinheiro para a educação e devolve em 60 parcelas mensais a partir do ano escolhido.</li>
+        <li><b>Tesouro Renda+</b>: monta uma aposentadoria complementar, paga em 240 parcelas mensais.</li>
+        <li><b>Com juros semestrais</b>: pagam parte dos juros a cada 6 meses, com IR em cada pagamento.</li>
+      </ul>
+      <p class="nota">O simulador ainda não calcula esses pagamentos, por isso esses títulos aparecem só para consulta.</p>${tabela(outros)}</details>` : "");
+  desenharCurvas(d);
+}
+
+function desenharCurvas(d) {
+  const curva = (tipo, el, cor, yRotulo) => {
+    const pontos = d.titulos.filter((t) => t.tipo === tipo).map((t) => ({
+      x: Math.max(0.05, mesesAte(t.vencimento) / 12), y: t.taxa, rotulo: t.vencimento.slice(-4), cor, grupo: "curva", nomeTooltip: t.nome,
+    }));
+    if (pontos.length < 2) { $(el).innerHTML = ""; return; }
+    Charts.dispersao($(el), pontos, {
+      altura: 220, ligar: "curva", rotulo: `Curva de juros: ${yRotulo}`,
+      xFmt: (v) => v + (v === 1 ? " ano" : " anos"), yFmt: (v) => pct(v, 1), xRotulo: "Anos até o vencimento", yRotulo,
+    });
+  };
+  curva("prefixado", "g-curva-pre", css("--acento"), "% ao ano");
+  curva("ipca", "g-curva-ipca", css("--ocre"), "IPCA + % ao ano");
 }
 
 function renderCatalogoApps() {
@@ -1041,7 +1177,7 @@ function renderCatalogoApps() {
       <div class="inst-topo"><h3>${esc(p.nome)}</h3><span class="selo">${Dados.TIPOS_PLATAFORMA[p.tipo]}</span></div>
       <p class="nota">${esc(p.destaque)}</p>
       <ul class="chips" aria-label="O que oferece">${p.oferece.map((o) => `<li>${Dados.OFERTAS[o]}</li>`).join("")}</ul>
-      ${campos.length ? `<div class="app-custos">${campos.map((k) => `<label for="apc-${p.id}-${k}">${ROTULO_CUSTO[k][0]}<input type="number" id="apc-${p.id}-${k}" data-app="${p.id}" data-custo="${k}" step="${ROTULO_CUSTO[k][1]}" min="0" value="${c[k] ?? ""}" /></label>`).join("")}</div>` : ""}
+      ${campos.length ? `<div class="app-custos">${campos.map((k) => `<label for="apc-${p.id}-${k}">${ROTULO_CUSTO[k][0]} ${termo(ROTULO_CUSTO[k][2])}<input type="number" id="apc-${p.id}-${k}" data-app="${p.id}" data-custo="${k}" step="${ROTULO_CUSTO[k][1]}" min="0" value="${c[k] ?? ""}" /></label>`).join("")}</div>` : ""}
       <p class="cuidado"><b>Cuidado:</b> ${esc(p.cuidado)}</p>
       <p class="ref">${estado.plataformas[p.id] ? "Custos editados por você" : "Custos de referência (2025): confira no app"}</p>
     </article>`;
@@ -1062,8 +1198,202 @@ async function carregarTesouro() {
     });
     if (mudou) gravar();
   }
+  renderFita();
   if (rotaAtual === "apps") { renderTesouro(); renderMelhor(); }
-  else if (rotaAtual === "renda-fixa") RENDER["renda-fixa"]();
+  else if (rotaAtual && rotaAtual !== "visao") RENDER[rotaAtual]?.();
+}
+
+// ============ MANUAL ============
+const nomeAba = (rota) => Dados.GUIA_ABAS.find((a) => a.rota === rota)?.nome || rota;
+
+// Exemplo de cada investimento com R$ 1.000. Renda fixa usa as taxas atuais; renda variável é hipotética.
+function exemploManual(inv) {
+  const e = inv.exemplo;
+  const mkt = mktRF();
+  const umAno = (prod) => Calc.simularPlano({ produtos: [{ id: "ex", nome: inv.nome, teto: 0, pctAcima: 100, carencia: 0, isento: false, ...prod }], inicial: 1000, mensal: 0, meses: 12, ...mkt, distribuir: false });
+  if (e.tipo === "rf") {
+    const r = umAno(e.prod);
+    return `${e.hipotetico ? "Exemplo hipotético com IPCA + 7,5% isento: " : ""}R$ 1.000 viram ${brl(r.liquido)} em 1 ano${e.prod.isento ? " (sem IR)" : ", já descontado o IR"}.`;
+  }
+  if (e.tipo === "tesouro") {
+    const t = tituloMaisProximo(e.familia, e.prazoRef);
+    const r = umAno({ tipo: e.familia, pct: t ? t.taxa : e.padrao, custodia: 0.2 });
+    const taxa = t ? `${t.nome}, ${taxaTesouroTexto(t)}` : `taxa de exemplo de ${e.familia === "ipca" ? "IPCA + " : ""}${pct(e.padrao, 0)}`;
+    return `Com o ${taxa}: R$ 1.000 viram cerca de ${brl(r.liquido)} em 1 ano, já descontados IR e custódia. Isso vale para quem fica até o vencimento; vendendo antes, o valor muda.`;
+  }
+  if (e.tipo === "fii") {
+    const fii = num("m-fii");
+    return `Com rendimento de ${pct(fii, 1)} ao ano, R$ 1.000 pagam cerca de ${brl((1000 * fii) / 100 / 12)} por mês, sem IR. O valor da cota pode subir ou cair.`;
+  }
+  if (e.tipo === "acoes") {
+    const dy = num("m-acoes");
+    return `Exemplo hipotético: com dividendos de ${pct(dy, 1)} ao ano, R$ 1.000 pagam ${brl((1000 * dy) / 100)} por ano. Se a ação subir 10%, você ganha mais ${brl(100)} ao vender; se cair 30%, perde ${brl(300)}.`;
+  }
+  if (e.tipo === "etf") return `Exemplo hipotético: se o Ibovespa subir 10% em um ano, R$ 1.000 em BOVA11 viram cerca de ${brl(1000 * 1.1 * (1 - 0.001))} (taxa de 0,10% ao ano). Se cair 10%, viram cerca de ${brl(1000 * 0.9 * (1 - 0.001))}.`;
+  if (e.tipo === "exterior") return `Exemplo hipotético: se as ações sobem 8% e o dólar sobe 5%, R$ 1.000 viram cerca de ${brl(1000 * 1.08 * 1.05)}. Se o dólar cair 10%, o mesmo investimento vira cerca de ${brl(1000 * 1.08 * 0.9)}.`;
+  if (e.tipo === "historico") {
+    const c = classe(e.classe);
+    const est = Calc.estatisticas(c.hist);
+    return `Não paga renda: R$ 1.000 só viram mais se o preço subir. De 2016 a 2024, o melhor ano em reais foi ${pct(est.melhor * 100, 0, true)} e o pior, ${pct(est.pior * 100, 0, true)}.`;
+  }
+  if (e.tipo === "fundo") return `Com retorno bruto de 12% ao ano, uma taxa de administração de 2% deixa R$ 1.000 em ${brl(1000 * Math.pow(1.1, 10))} depois de 10 anos, contra ${brl(1000 * Math.pow(1.12, 10))} sem a taxa.`;
+  return "";
+}
+
+// Renda mensal estimada de um valor em cada investimento, com as taxas de hoje.
+function linhasRenda(valor) {
+  const mkt = mktRF();
+  const rf = (taxaAnual, ir) => Calc.rendaMensal({ valor, taxaAnual, ir });
+  const comCustodia = (r) => (1 + r) * 0.998 - 1;
+  const linhas = [
+    { nome: "Poupança", como: "Juros todo mês, no aniversário do depósito", mes: rf(Calc.taxaPoupanca(mkt.selic), 0), imposto: "Isenta" },
+    { nome: "Tesouro Selic", como: "Juros que se acumulam e você recebe na venda", mes: rf(mkt.selic, 0.15), imposto: "15% (mais de 2 anos)" },
+    { nome: "CDB 100% do CDI", como: "Juros que se acumulam e você recebe no resgate", mes: rf(mkt.cdi, 0.15), imposto: "15% (mais de 2 anos)" },
+    { nome: "LCI/LCA 90% do CDI", como: "Juros que se acumulam até o vencimento", mes: rf(Calc.taxaPctCDI(mkt.cdi, 90), 0), imposto: "Isenta" },
+  ];
+  const pre = tituloMaisProximo("prefixado", 36);
+  linhas.push({ nome: pre ? pre.nome : "Tesouro Prefixado (exemplo: 13%)", como: "Juros travados na compra, recebidos no vencimento", mes: rf(comCustodia((pre ? pre.taxa : 13) / 100), 0.15), imposto: "15% (mais de 2 anos)" });
+  const ip = tituloMaisProximo("ipca", 120);
+  linhas.push({ nome: ip ? ip.nome : "Tesouro IPCA+ (exemplo: IPCA + 7%)", como: "Inflação + juro fixo, recebidos no vencimento", mes: rf(comCustodia((1 + mkt.ipca) * (1 + (ip ? ip.taxa : 7) / 100) - 1), 0.15), imposto: "15% (mais de 2 anos)" });
+  // Melhor oferta cadastrada pelo usuário (respeitando o teto).
+  const ofertas = produtosValidos().map((p) => {
+    const r1 = Calc.taxaProduto(p, mkt), r2 = Calc.taxaProduto(p, mkt, true), ir = p.isento ? 0 : 0.15;
+    const dentro = p.teto > 0 ? Math.min(valor, p.teto) : valor;
+    return { p, mes: Calc.rendaMensal({ valor: dentro, taxaAnual: r1, ir }) + Calc.rendaMensal({ valor: valor - dentro, taxaAnual: r2, ir }) };
+  }).sort((a, b) => b.mes - a.mes);
+  if (ofertas.length) {
+    const o = ofertas[0];
+    linhas.push({ nome: `Sua melhor oferta: ${o.p.nome}`, como: `${ondeComprar(o.p)} · ${descricaoProduto(o.p)}`, mes: o.mes, imposto: o.p.isento ? "Isenta" : "15% (mais de 2 anos)", destaque: true });
+  }
+  linhas.push(
+    { nome: "Fundos imobiliários", como: "Aluguéis depositados todo mês", mes: (valor * num("m-fii")) / 100 / 12, imposto: "Isentos (com condições)" },
+    { nome: "Ações (dividendos)", como: "Parte do lucro, algumas vezes por ano (média mensal)", mes: (valor * num("m-acoes")) / 100 / 12, imposto: "Isentos para a maioria" },
+    { nome: "Bitcoin e ouro", como: "Não pagam renda: só ganham se o preço subir", mes: 0, imposto: "Na venda com lucro" },
+  );
+  return linhas;
+}
+
+function renderRendaMensal() {
+  const valor = num("m-valor");
+  const linhas = linhasRenda(valor);
+  const max = Math.max(...linhas.map((l) => l.mes), 1);
+  const m = mktRF();
+  $("tab-renda").innerHTML = `<thead><tr><th>Investimento</th><th>Como o dinheiro chega</th><th>Por mês</th><th>Em 12 meses</th><th>Imposto</th></tr></thead><tbody>` +
+    linhas.map((l) => `<tr${l.destaque ? ' class="linha-destaque"' : ""}>
+      <td>${esc(l.nome)}</td>
+      <td class="texto">${esc(l.como)}</td>
+      <td><span class="valor-barra" style="--p:${((l.mes / max) * 100).toFixed(1)}%">${brl(l.mes)}</span></td>
+      <td>${brl(l.mes * 12)}</td>
+      <td class="texto">${esc(l.imposto)}</td>
+    </tr>`).join("") + "</tbody>";
+  $("renda-nota").textContent = `Estimativas com as taxas de hoje (Selic ${pct(m.selic * 100, 2)}, CDI ${pct(m.cdi * 100, 2)}, IPCA ${pct(m.ipca * 100, 2)}) e IR de 15%, que vale para aplicações de mais de 2 anos. ` +
+    "Na renda fixa, os juros se acumulam e você recebe no resgate: o valor por mês é uma média. FIIs e ações: estimativas médias; cada fundo e cada empresa paga diferente, e a cota ou a ação pode cair.";
+}
+
+// Parte 3 do manual: um cartão por investimento, agrupado pelo mecanismo de retorno.
+function renderInvestimentosManual() {
+  const M = Dados.MANUAL_MECANISMOS;
+  $("m-investimentos").innerHTML = `<article class="painel"><h2>Cada investimento, explicado</h2><p class="nota">Agrupados pela forma como o dinheiro volta para você. Os exemplos de renda fixa usam as taxas de hoje; os de renda variável são hipotéticos.</p></article>` +
+    M.map((m) => {
+      const lista = Dados.MANUAL_INVESTIMENTOS.filter((i) => i.mecanismo === m.id);
+      return `<article class="painel"><p class="sobre">${esc(m.nome)}</p><h2>${esc(m.titulo)}</h2>
+        <div class="investimentos">${lista.map((inv) => `
+          <div class="inv-cartao" id="inv-${inv.id}">
+            <h3>${esc(inv.nome)}</h3>
+            <p class="inv-frase">${esc(inv.frase)}</p>
+            <dl class="inv-dl">
+              <dt>Como o dinheiro volta</dt><dd>${esc(inv.comoGanha)}</dd>
+              <dt>Quando você recebe</dt><dd>${esc(inv.quando)}</dd>
+              <dt>Exemplo com R$ 1.000</dt><dd class="exemplo">${esc(exemploManual(inv))}</dd>
+              <dt>Riscos</dt><dd>${esc(inv.riscos)}</dd>
+              <dt>Imposto</dt><dd>${esc(inv.imposto)}</dd>
+            </dl>
+            <a class="link-acao" href="#${inv.rota}">Ver em ${esc(nomeAba(inv.rota))} →</a>
+          </div>`).join("")}</div></article>`;
+    }).join("");
+}
+
+function renderManual() {
+  const M = Dados.MANUAL_MECANISMOS;
+  // 1. Mecanismos e juros compostos
+  const prazos = [[1, "1 mês"], [12, "1 ano"], [60, "5 anos"], [120, "10 anos"], [240, "20 anos"]];
+  const simples = (m) => 1000 * (1 + 0.01 * m), composto = (m) => 1000 * Math.pow(1.01, m);
+  $("m-mecanismos").innerHTML = `
+    <h2>Como o dinheiro volta para você</h2>
+    <p class="nota">Todo investimento devolve dinheiro de um destes quatro jeitos. Alguns combinam mais de um: uma ação paga dividendos e também pode se valorizar.</p>
+    <div class="mecanismos">${M.map((m) => `<div class="mecanismo"><span class="mec-nome">${esc(m.nome)}</span><h3>${esc(m.titulo)}</h3><p>${esc(m.texto)}</p><p class="sub">Exemplos: ${esc(m.exemplos)}</p></div>`).join("")}</div>
+    <h3 class="m-sub">O segredo: juros compostos ${termo("jurosCompostos")}</h3>
+    <p class="m-texto">Quando os juros de um mês passam a render nos meses seguintes, o dinheiro cresce cada vez mais rápido. Veja R$ 1.000 rendendo 1% ao mês:</p>
+    <div class="rolagem"><table class="tabela"><thead><tr><th>Depois de</th><th>Juros simples</th><th>Juros compostos</th></tr></thead><tbody>${prazos.map(([m, r]) => `<tr><td>${r}</td><td>${brl(simples(m))}</td><td><b>${brl(composto(m))}</b></td></tr>`).join("")}</tbody></table></div>
+    <p class="nota">Em 20 anos, os juros compostos rendem ${((composto(240) - 1000) / (simples(240) - 1000)).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} vezes mais que os simples. Por isso começar cedo pesa mais do que achar a taxa perfeita.</p>`;
+  // 2. Quanto rende por mês
+  renderRendaMensal();
+  // 3. Cada investimento
+  renderInvestimentosManual();
+  // 4. Como usar o hub
+  $("m-hub").innerHTML = `<h2>Como usar o hub</h2>
+    <p class="nota">O que cada aba faz e como tirar proveito dela. Viu um <span class="termo termo-exemplo" aria-hidden="true">?</span> ao lado de um termo? Toque nele para ver a explicação.</p>
+    <div class="guia">${Dados.GUIA_ABAS.map((a) => `
+      <div class="guia-item">
+        <h3>${esc(a.nome)}</h3>
+        <p>${esc(a.paraQue)}</p>
+        <ol>${a.passos.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>
+        <p class="dica-guia"><b>Dica:</b> ${esc(a.dica)}</p>
+        <a class="botao fantasma pequeno" href="#${a.rota}">Abrir ${esc(a.nome)}</a>
+      </div>`).join("")}</div>`;
+  // 5. Glossário
+  const termos = Object.entries(Dados.GLOSSARIO).sort((a, b) => a[1].termo.localeCompare(b[1].termo, "pt-BR"));
+  $("m-glossario").innerHTML = `<h2>Glossário</h2><p class="nota">Os termos que aparecem no hub, em poucas palavras.</p>
+    <dl class="glossario">${termos.map(([id, g]) => `<div class="glossario-item" id="g-${id}"><dt>${esc(g.termo)}</dt><dd>${esc(g.def)}</dd></div>`).join("")}</dl>`;
+  if (termoPendente) { const t = termoPendente; termoPendente = null; requestAnimationFrame(() => destacarTermo(t)); }
+}
+RENDER.manual = renderManual;
+
+// ---- Balão do glossário (botões "?")
+let balao = null, termoPendente = null;
+function fecharBalao() {
+  if (!balao) return;
+  balao.remove();
+  balao = null;
+  document.querySelectorAll('.termo[aria-expanded="true"]').forEach((b) => b.setAttribute("aria-expanded", "false"));
+}
+function abrirBalao(btn) {
+  const id = btn.dataset.termo;
+  const g = Dados.GLOSSARIO[id];
+  if (!g) return;
+  const mesmo = balao && balao.dataset.para === id;
+  fecharBalao();
+  if (mesmo) return;
+  balao = document.createElement("div");
+  balao.className = "balao";
+  balao.dataset.para = id; // não usar data-termo aqui: é o seletor dos botões "?"
+  balao.setAttribute("role", "dialog");
+  balao.setAttribute("aria-label", g.termo);
+  balao.innerHTML = `<strong>${esc(g.termo)}</strong><p>${esc(g.def)}</p><button type="button" class="botao-link" data-ver-termo="${id}">Ver no manual</button>`;
+  document.body.appendChild(balao);
+  const r = btn.getBoundingClientRect();
+  const largura = Math.min(300, innerWidth - 32);
+  balao.style.width = largura + "px";
+  const esquerda = Math.max(16, Math.min(r.left + r.width / 2 - largura / 2, innerWidth - largura - 16));
+  let topo = r.bottom + 8;
+  if (topo + balao.offsetHeight > innerHeight - 8 && r.top - balao.offsetHeight - 8 > 0) topo = r.top - balao.offsetHeight - 8;
+  balao.style.left = esquerda + scrollX + "px";
+  balao.style.top = topo + scrollY + "px";
+  btn.setAttribute("aria-expanded", "true");
+}
+function destacarTermo(id) {
+  const el = $("g-" + id);
+  if (!el) return;
+  el.scrollIntoView({ block: "center" }); // salto direto: o destaque animado mostra onde está
+  el.classList.remove("destacado");
+  void el.offsetWidth; // reinicia a animação
+  el.classList.add("destacado");
+}
+function verNoManual(id) {
+  fecharBalao();
+  if (rotaAtual === "manual") return destacarTermo(id);
+  termoPendente = id;
+  location.hash = "manual";
 }
 
 // ============ CARTEIRA ============
@@ -1125,6 +1455,76 @@ function abrirFonte() {
 // ============ Eventos ============
 function ligarEventos() {
   $("fonte-dados").addEventListener("click", abrirFonte);
+
+  // Glossário: abre o balão do "?", "Ver no manual" e fecha ao clicar fora.
+  document.addEventListener("click", (e) => {
+    const t = e.target.closest("button.termo[data-termo]");
+    if (t) { e.preventDefault(); abrirBalao(t); return; }
+    const v = e.target.closest("[data-ver-termo]");
+    if (v) { verNoManual(v.dataset.verTermo); return; }
+    if (balao && !e.target.closest(".balao")) fecharBalao();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && balao) {
+      const id = balao.dataset.para;
+      fecharBalao();
+      document.querySelector(`.termo[data-termo="${id}"]`)?.focus();
+    }
+  });
+  window.addEventListener("resize", fecharBalao);
+
+  // Manual: índice e calculadora de renda mensal
+  document.querySelector(".manual-indice").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-secao]");
+    if (!b) return;
+    $(b.dataset.secao).scrollIntoView({ block: "start" });
+  });
+  $("form-renda").addEventListener("input", () => { renderRendaMensal(); renderInvestimentosManual(); });
+
+  // Seus dados: copiar e colar entre aparelhos
+  let dadosImportados = null;
+  const statusDados = (msg, tipo = "") => { const el = $("dados-status"); el.textContent = msg; el.className = "status " + tipo; };
+  $("dados-copiar").addEventListener("click", () => {
+    const codigo = Calc.exportarCodigo(dadosParaSalvar());
+    const mostrar = () => {
+      const caixa = $("dados-codigo");
+      caixa.value = codigo;
+      caixa.hidden = false;
+      caixa.select();
+      statusDados("Não deu para copiar sozinho. Selecione o código abaixo e copie.");
+    };
+    try {
+      navigator.clipboard.writeText(codigo).then(
+        () => statusDados("Código copiado. No outro aparelho, abra o hub e use \"Colar dados de outro aparelho\".", "ok"),
+        mostrar,
+      );
+    } catch {
+      mostrar();
+    }
+  });
+  $("dados-colar-abrir").addEventListener("click", () => { $("dados-importar").hidden = false; $("dados-entrada").focus(); });
+  $("dados-cancelar").addEventListener("click", () => { $("dados-importar").hidden = true; $("dados-confirmar").hidden = true; statusDados(""); });
+  $("dados-importar-btn").addEventListener("click", () => {
+    try {
+      dadosImportados = Calc.importarCodigo($("dados-entrada").value);
+      if (!dadosImportados.perfil && !dadosImportados.carteira && !dadosImportados.produtosRF) throw new Error("Esse código não tem dados do Invest Simulador.");
+      $("dados-confirmar").hidden = false;
+      statusDados("");
+      $("dados-confirmar-sim").focus();
+    } catch (err) {
+      $("dados-confirmar").hidden = true;
+      statusDados(err.message, "erro");
+    }
+  });
+  $("dados-confirmar-nao").addEventListener("click", () => { $("dados-confirmar").hidden = true; dadosImportados = null; });
+  $("dados-confirmar-sim").addEventListener("click", () => {
+    try {
+      localStorage.setItem(CHAVE, JSON.stringify(dadosImportados));
+      location.reload();
+    } catch {
+      statusDados("Este navegador não deixa salvar dados (modo anônimo ou bloqueio de cookies). Tente em uma janela normal.", "erro");
+    }
+  });
   $("btn-tema").addEventListener("click", () => aplicarTema(document.documentElement.dataset.tema !== "claro"));
   $("btn-topo").addEventListener("click", () => window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }));
   window.addEventListener("scroll", () => { $("btn-topo").dataset.oculto = window.scrollY > 900 ? "nao" : "sim"; }, { passive: true });
@@ -1297,6 +1697,7 @@ function ligarEventos() {
   montarQuestionario();
   montarHistorico();
   ligarEventos();
+  iniciarWorkerProjecao();
   $("btn-tema").setAttribute("aria-label", document.documentElement.dataset.tema === "claro" ? "Mudar para o tema preto" : "Mudar para o tema claro");
   if (estado.perfil.id) $("pj-carteira").value = estado.perfil.id;
   else $("pj-carteira").value = "moderado";

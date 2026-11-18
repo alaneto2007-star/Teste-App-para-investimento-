@@ -1,6 +1,6 @@
 {
-  "atualizado": "2026-11-13",
-  "dataBase": "13/11/2026",
+  "atualizado": "2026-11-16",
+  "dataBase": "16/11/2026",
   "titulos": [
     {
       "nome": "Tesouro Selic 2027",
@@ -8,7 +8,7 @@
       "tipo": "selic",
       "vencimento": "01/03/2027",
       "taxa": 0.03,
-      "pu": 20302.53
+      "pu": 20312.8
     },
     {
       "nome": "Tesouro Selic 2028",
@@ -16,7 +16,7 @@
       "tipo": "selic",
       "vencimento": "01/03/2028",
       "taxa": 0.03,
-      "pu": 20295.77
+      "pu": 20305.89
     },
     {
       "nome": "Tesouro Selic 2029",
@@ -24,7 +24,7 @@
       "tipo": "selic",
       "vencimento": "01/03/2029",
       "taxa": 0.05,
-      "pu": 20279.34
+      "pu": 20289.6
     },
     {
       "nome": "Tesouro Selic 2031",
@@ -32,7 +32,7 @@
       "tipo": "selic",
       "vencimento": "01/03/2031",
       "taxa": 0.11,
-      "pu": 20211.26
+      "pu": 20221.61
     },
     {
       "nome": "Tesouro Prefixado 2027",
@@ -40,63 +40,63 @@
       "tipo": "prefixado",
       "vencimento": "01/01/2027",
       "taxa": 13.55,
-      "pu": 983.99
+      "pu": 984.48
     },
     {
       "nome": "Tesouro Prefixado 2028",
       "tipoTitulo": "Tesouro Prefixado",
       "tipo": "prefixado",
       "vencimento": "01/01/2028",
-      "taxa": 14.27,
-      "pu": 860.87
+      "taxa": 14.2,
+      "pu": 861.92
     },
     {
       "nome": "Tesouro Prefixado 2029",
       "tipoTitulo": "Tesouro Prefixado",
       "tipo": "prefixado",
       "vencimento": "01/01/2029",
-      "taxa": 14.85,
-      "pu": 746.95
+      "taxa": 14.75,
+      "pu": 748.73
     },
     {
       "nome": "Tesouro Prefixado 2031",
       "tipoTitulo": "Tesouro Prefixado",
       "tipo": "prefixado",
       "vencimento": "01/01/2031",
-      "taxa": 15.21,
-      "pu": 559.99
+      "taxa": 15.12,
+      "pu": 562.1
     },
     {
       "nome": "Tesouro Prefixado 2032",
       "tipoTitulo": "Tesouro Prefixado",
       "tipo": "prefixado",
       "vencimento": "01/01/2032",
-      "taxa": 15.32,
-      "pu": 483.7
+      "taxa": 15.23,
+      "pu": 485.9
     },
     {
       "nome": "Tesouro IPCA+ 2029",
       "tipoTitulo": "Tesouro IPCA+",
       "tipo": "ipca",
       "vencimento": "15/05/2029",
-      "taxa": 7.47,
-      "pu": 3995.96
+      "taxa": 7.44,
+      "pu": 4000.36
     },
     {
       "nome": "Tesouro IPCA+ 2032",
       "tipoTitulo": "Tesouro IPCA+",
       "tipo": "ipca",
       "vencimento": "15/08/2032",
-      "taxa": 7.73,
-      "pu": 3119.36
+      "taxa": 7.75,
+      "pu": 3117.36
     },
     {
       "nome": "Tesouro IPCA+ 2035",
       "tipoTitulo": "Tesouro IPCA+",
       "tipo": "ipca",
       "vencimento": "15/05/2035",
-      "taxa": 7.77,
-      "pu": 2539.08
+      "taxa": 7.78,
+      "pu": 2538.17
     },
     {
       "nome": "Tesouro IPCA+ 2040",
@@ -104,39 +104,39 @@
       "tipo": "ipca",
       "vencimento": "15/08/2040",
       "taxa": 7.49,
-      "pu": 1778.37
+      "pu": 1779.11
     },
     {
       "nome": "Tesouro IPCA+ 2045",
       "tipoTitulo": "Tesouro IPCA+",
       "tipo": "ipca",
       "vencimento": "15/05/2045",
-      "taxa": 7.49,
-      "pu": 1265.52
+      "taxa": 7.5,
+      "pu": 1263.88
     },
     {
       "nome": "Tesouro IPCA+ 2050",
       "tipoTitulo": "Tesouro IPCA+",
       "tipo": "ipca",
       "vencimento": "15/08/2050",
-      "taxa": 7.51,
-      "pu": 864.32
+      "taxa": 7.49,
+      "pu": 868.48
     },
     {
       "nome": "Tesouro Educa+ 2030",
       "tipoTitulo": "Tesouro Educa+",
       "tipo": null,
       "vencimento": "15/12/2030",
-      "taxa": 7.31,
-      "pu": 3381.88
+      "taxa": 7.29,
+      "pu": 3384.49
     },
     {
       "nome": "Tesouro Educa+ 2031",
       "tipoTitulo": "Tesouro Educa+",
       "tipo": null,
       "vencimento": "15/12/2031",
-      "taxa": 7.43,
-      "pu": 3982.78
+      "taxa": 7.42,
+      "pu": 3985.32
     },
     {
       "nome": "Tesouro Educa+ 2032",
@@ -144,63 +144,63 @@
       "tipo": null,
       "vencimento": "15/12/2032",
       "taxa": 7.6,
-      "pu": 3688.7
+      "pu": 3690.24
     },
     {
       "nome": "Tesouro Educa+ 2033",
       "tipoTitulo": "Tesouro Educa+",
       "tipo": null,
       "vencimento": "15/12/2033",
-      "taxa": 7.66,
-      "pu": 3421.2
+      "taxa": 7.67,
+      "pu": 3421.23
     },
     {
       "nome": "Tesouro Educa+ 2034",
       "tipoTitulo": "Tesouro Educa+",
       "tipo": null,
       "vencimento": "15/12/2034",
-      "taxa": 7.7,
-      "pu": 3172.2
+      "taxa": 7.72,
+      "pu": 3170.33
     },
     {
       "nome": "Tesouro Educa+ 2035",
       "tipoTitulo": "Tesouro Educa+",
       "tipo": null,
       "vencimento": "15/12/2035",
-      "taxa": 7.73,
-      "pu": 2941.04
+      "taxa": 7.74,
+      "pu": 2940.53
     },
     {
       "nome": "Tesouro Educa+ 2036",
       "tipoTitulo": "Tesouro Educa+",
       "tipo": null,
       "vencimento": "15/12/2036",
-      "taxa": 7.73,
-      "pu": 2731.06
+      "taxa": 7.75,
+      "pu": 2728.45
     },
     {
       "nome": "Tesouro Educa+ 2037",
       "tipoTitulo": "Tesouro Educa+",
       "tipo": null,
       "vencimento": "15/12/2037",
-      "taxa": 7.72,
-      "pu": 2538.25
+      "taxa": 7.74,
+      "pu": 2535.35
     },
     {
       "nome": "Tesouro Educa+ 2038",
       "tipoTitulo": "Tesouro Educa+",
       "tipo": null,
       "vencimento": "15/12/2038",
-      "taxa": 7.7,
-      "pu": 2361.97
+      "taxa": 7.71,
+      "pu": 2360.9
     },
     {
       "nome": "Tesouro Educa+ 2039",
       "tipoTitulo": "Tesouro Educa+",
       "tipo": null,
       "vencimento": "15/12/2039",
-      "taxa": 7.66,
-      "pu": 2202.95
+      "taxa": 7.67,
+      "pu": 2201.75
     },
     {
       "nome": "Tesouro Educa+ 2040",
@@ -208,15 +208,15 @@
       "tipo": null,
       "vencimento": "15/12/2040",
       "taxa": 7.61,
-      "pu": 2057.85
+      "pu": 2058.72
     },
     {
       "nome": "Tesouro Educa+ 2041",
       "tipoTitulo": "Tesouro Educa+",
       "tipo": null,
       "vencimento": "15/12/2041",
-      "taxa": 7.56,
-      "pu": 1924.03
+      "taxa": 7.57,
+      "pu": 1922.61
     },
     {
       "nome": "Tesouro Educa+ 2042",
@@ -224,7 +224,7 @@
       "tipo": null,
       "vencimento": "15/12/2042",
       "taxa": 7.53,
-      "pu": 1796.11
+      "pu": 1796.86
     },
     {
       "nome": "Tesouro Educa+ 2043",
@@ -232,39 +232,39 @@
       "tipo": null,
       "vencimento": "15/12/2043",
       "taxa": 7.51,
-      "pu": 1675.25
+      "pu": 1675.93
     },
     {
       "nome": "Tesouro Educa+ 2044",
       "tipoTitulo": "Tesouro Educa+",
       "tipo": null,
       "vencimento": "15/12/2044",
-      "taxa": 7.49,
-      "pu": 1563.21
+      "taxa": 7.5,
+      "pu": 1561.62
     },
     {
       "nome": "Tesouro Educa+ 2045",
       "tipoTitulo": "Tesouro Educa+",
       "tipo": null,
       "vencimento": "15/12/2045",
-      "taxa": 7.49,
-      "pu": 1454.88
+      "taxa": 7.5,
+      "pu": 1453.27
     },
     {
       "nome": "Tesouro Educa+ 2046",
       "tipoTitulo": "Tesouro Educa+",
       "tipo": null,
       "vencimento": "15/12/2046",
-      "taxa": 7.49,
-      "pu": 1354.15
+      "taxa": 7.5,
+      "pu": 1352.52
     },
     {
       "nome": "Tesouro Educa+ 2047",
       "tipoTitulo": "Tesouro Educa+",
       "tipo": null,
       "vencimento": "15/12/2047",
-      "taxa": 7.49,
-      "pu": 1260.5
+      "taxa": 7.5,
+      "pu": 1258.87
     },
     {
       "nome": "Tesouro Educa+ 2048",
@@ -272,15 +272,15 @@
       "tipo": null,
       "vencimento": "15/12/2048",
       "taxa": 7.5,
-      "pu": 1171.22
+      "pu": 1171.71
     },
     {
       "nome": "Tesouro IGPM+ com Juros Semestrais 2031",
       "tipoTitulo": "Tesouro IGPM+ com Juros Semestrais",
       "tipo": null,
       "vencimento": "01/01/2031",
-      "taxa": 7.64,
-      "pu": 8094.27
+      "taxa": 7.63,
+      "pu": 8101.21
     },
     {
       "nome": "Tesouro IPCA+ com Juros Semestrais 2030",
@@ -288,31 +288,31 @@
       "tipo": null,
       "vencimento": "15/08/2030",
       "taxa": 7.59,
-      "pu": 4617.77
+      "pu": 4619.7
     },
     {
       "nome": "Tesouro IPCA+ com Juros Semestrais 2032",
       "tipoTitulo": "Tesouro IPCA+ com Juros Semestrais",
       "tipo": null,
       "vencimento": "15/08/2032",
-      "taxa": 7.69,
-      "pu": 4495.37
+      "taxa": 7.71,
+      "pu": 4493.25
     },
     {
       "nome": "Tesouro IPCA+ com Juros Semestrais 2035",
       "tipoTitulo": "Tesouro IPCA+ com Juros Semestrais",
       "tipo": null,
       "vencimento": "15/05/2035",
-      "taxa": 7.73,
-      "pu": 4295.88
+      "taxa": 7.74,
+      "pu": 4295.05
     },
     {
       "nome": "Tesouro IPCA+ com Juros Semestrais 2037",
       "tipoTitulo": "Tesouro IPCA+ com Juros Semestrais",
       "tipo": null,
       "vencimento": "15/05/2037",
-      "taxa": 7.67,
-      "pu": 4238.33
+      "taxa": 7.68,
+      "pu": 4237.07
     },
     {
       "nome": "Tesouro IPCA+ com Juros Semestrais 2040",
@@ -320,23 +320,23 @@
       "tipo": null,
       "vencimento": "15/08/2040",
       "taxa": 7.54,
-      "pu": 4253.4
+      "pu": 4255.16
     },
     {
       "nome": "Tesouro IPCA+ com Juros Semestrais 2045",
       "tipoTitulo": "Tesouro IPCA+ com Juros Semestrais",
       "tipo": null,
       "vencimento": "15/05/2045",
-      "taxa": 7.53,
-      "pu": 4088.47
+      "taxa": 7.54,
+      "pu": 4086.06
     },
     {
       "nome": "Tesouro IPCA+ com Juros Semestrais 2050",
       "tipoTitulo": "Tesouro IPCA+ com Juros Semestrais",
       "tipo": null,
       "vencimento": "15/08/2050",
-      "taxa": 7.54,
-      "pu": 4075.76
+      "taxa": 7.53,
+      "pu": 4081.93
     },
     {
       "nome": "Tesouro IPCA+ com Juros Semestrais 2055",
@@ -344,7 +344,7 @@
       "tipo": null,
       "vencimento": "15/05/2055",
       "taxa": 7.53,
-      "pu": 3962.41
+      "pu": 3964.05
     },
     {
       "nome": "Tesouro IPCA+ com Juros Semestrais 2060",
@@ -352,7 +352,7 @@
       "tipo": null,
       "vencimento": "15/08/2060",
       "taxa": 7.54,
-      "pu": 3988.8
+      "pu": 3990.45
     },
     {
       "nome": "Tesouro Prefixado com Juros Semestrais 2027",
@@ -360,55 +360,55 @@
       "tipo": null,
       "vencimento": "01/01/2027",
       "taxa": 13.6,
-      "pu": 1031.96
+      "pu": 1032.48
     },
     {
       "nome": "Tesouro Prefixado com Juros Semestrais 2029",
       "tipoTitulo": "Tesouro Prefixado com Juros Semestrais",
       "tipo": null,
       "vencimento": "01/01/2029",
-      "taxa": 14.75,
-      "pu": 958.57
+      "taxa": 14.66,
+      "pu": 960.5
     },
     {
       "nome": "Tesouro Prefixado com Juros Semestrais 2031",
       "tipoTitulo": "Tesouro Prefixado com Juros Semestrais",
       "tipo": null,
       "vencimento": "01/01/2031",
-      "taxa": 15.2,
-      "pu": 891.59
+      "taxa": 15.11,
+      "pu": 894.38
     },
     {
       "nome": "Tesouro Prefixado com Juros Semestrais 2033",
       "tipoTitulo": "Tesouro Prefixado com Juros Semestrais",
       "tipo": null,
       "vencimento": "01/01/2033",
-      "taxa": 15.37,
-      "pu": 840.12
+      "taxa": 15.28,
+      "pu": 843.45
     },
     {
       "nome": "Tesouro Prefixado com Juros Semestrais 2035",
       "tipoTitulo": "Tesouro Prefixado com Juros Semestrais",
       "tipo": null,
       "vencimento": "01/01/2035",
-      "taxa": 15.39,
-      "pu": 804.88
+      "taxa": 15.31,
+      "pu": 808.22
     },
     {
       "nome": "Tesouro Prefixado com Juros Semestrais 2037",
       "tipoTitulo": "Tesouro Prefixado com Juros Semestrais",
       "tipo": null,
       "vencimento": "01/01/2037",
-      "taxa": 15.3,
-      "pu": 781.92
+      "taxa": 15.21,
+      "pu": 785.88
     },
     {
       "nome": "Tesouro Renda+ Aposentadoria Extra 2049",
       "tipoTitulo": "Tesouro Renda+ Aposentadoria Extra",
       "tipo": null,
       "vencimento": "15/12/2049",
-      "taxa": 7.58,
-      "pu": 2007.14
+      "taxa": 7.59,
+      "pu": 2005.97
     },
     {
       "nome": "Tesouro Renda+ Aposentadoria Extra 2054",
@@ -416,7 +416,7 @@
       "tipo": null,
       "vencimento": "15/12/2054",
       "taxa": 7.54,
-      "pu": 1404.14
+      "pu": 1404.72
     },
     {
       "nome": "Tesouro Renda+ Aposentadoria Extra 2059",
@@ -424,15 +424,15 @@
       "tipo": null,
       "vencimento": "15/12/2059",
       "taxa": 7.5,
-      "pu": 985.88
+      "pu": 986.29
     },
     {
       "nome": "Tesouro Renda+ Aposentadoria Extra 2064",
       "tipoTitulo": "Tesouro Renda+ Aposentadoria Extra",
       "tipo": null,
       "vencimento": "15/12/2064",
-      "taxa": 7.51,
-      "pu": 686.7
+      "taxa": 7.5,
+      "pu": 688.62
     },
     {
       "nome": "Tesouro Renda+ Aposentadoria Extra 2069",
@@ -440,7 +440,7 @@
       "tipo": null,
       "vencimento": "15/12/2069",
       "taxa": 7.51,
-      "pu": 479.16
+      "pu": 479.35
     },
     {
       "nome": "Tesouro Renda+ Aposentadoria Extra 2074",
@@ -448,7 +448,7 @@
       "tipo": null,
       "vencimento": "15/12/2074",
       "taxa": 7.52,
-      "pu": 333.22
+      "pu": 333.36
     },
     {
       "nome": "Tesouro Renda+ Aposentadoria Extra 2079",
@@ -456,7 +456,7 @@
       "tipo": null,
       "vencimento": "15/12/2079",
       "taxa": 7.53,
-      "pu": 231.5
+      "pu": 231.6
     },
     {
       "nome": "Tesouro Renda+ Aposentadoria Extra 2084",
@@ -464,7 +464,7 @@
       "tipo": null,
       "vencimento": "15/12/2084",
       "taxa": 7.53,
-      "pu": 161.39
+      "pu": 161.45
     }
   ],
   "fonte": "Tesouro Transparente (Tesouro Nacional)",
